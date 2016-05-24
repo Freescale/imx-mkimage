@@ -69,6 +69,30 @@ typedef struct {
 	uint32_t flags;		/*4*/
 } __attribute__((packed)) boot_img_t;; /*32*/
 
+#define CORE_SC 	1
+#define CORE_CM4_0 	2
+#define CORE_CM4_1 	3
+#define CORE_CA53 	4
+#define CORE_CA72 	5
+
+#define BOOT_IMG_FLAGS_CORE_MASK	0xF
+#define BOOT_IMG_FLAGS_CPU_RID_MASK	0x3FF0
+#define BOOT_IMG_FLAGS_CPU_RID_SHIFT	4
+#define BOOT_IMG_FLAGS_MU_RID_MASK	0xFFC000
+#define BOOT_IMG_FLAGS_MU_RID_SHIFT	14
+#define BOOT_IMG_FLAGS_PARTITION_ID_MASK	0x1F000000
+#define BOOT_IMG_FLAGS_PARTITION_ID_SHIFT	24
+
+#define SC_R_A53_0	1
+#define SC_R_A72_0	6
+#define SC_R_MU_0A	213
+#define SC_R_M4_0_PID0	278
+#define SC_R_M4_0_MU_1A	297
+#define SC_R_M4_1_PID0	298
+#define SC_R_M4_1_MU_1A 317
+#define PARTITION_ID_M4	0
+#define PARTITION_ID_AP	1
+
 typedef struct {
 	uint32_t num_images;	/*4*/
 	uint32_t bd_size;	/*4*/
@@ -95,12 +119,6 @@ typedef struct {
 	boot_data_v3_t boot_data; /*128*/
 	dcd_v2_t dcd_table; /*2880*/
 }  __attribute__((packed)) imx_header_v3_t; /*3072*/
-
-#define CORE_SC 	1
-#define CORE_CM4_0 	2
-#define CORE_CM4_1 	3
-#define CORE_CA53 	4
-#define CORE_CA72 	5
 
 /* Command tags and parameters */
 #define IVT_HEADER_TAG			0xD1
@@ -724,7 +742,8 @@ int main(int argc, char **argv)
 	imx_header.boot_data.img[0].dst = 0x30fe0000;
 	imx_header.boot_data.img[0].entry = 0x1ffe0000;
 	imx_header.boot_data.img[0].size = scfw_file_size;
-	imx_header.boot_data.img[0].flags = (CORE_SC & 0x7);
+	imx_header.boot_data.img[0].flags = 0;
+	imx_header.boot_data.img[0].flags = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
 	imx_header.boot_data.num_images++;
 	imx_header.boot_data.bd_size = sizeof(boot_data_v3_t);
 
@@ -757,14 +776,20 @@ int main(int argc, char **argv)
 				fprintf(stderr, "! Invalid CM4_0 start address\n");
 				exit(EXIT_FAILURE);
 			}
-			imx_header.boot_data.img[1].flags = (CORE_CM4_0 & 0x7);
+			imx_header.boot_data.img[1].flags = (CORE_CM4_0 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data.img[1].flags |= (SC_R_M4_0_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data.img[1].flags |= (SC_R_M4_0_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data.img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 		}
 		else {
 			if(cm4_start_addr == 0x34fe0000) {
 				fprintf(stderr, "! Invalid CM4_1 start address\n");
 				exit(EXIT_FAILURE);
 			}
-			imx_header.boot_data.img[1].flags = (CORE_CM4_1 & 0x7);
+			imx_header.boot_data.img[1].flags = (CORE_CM4_1 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data.img[1].flags |= (SC_R_M4_1_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data.img[1].flags |= (SC_R_M4_1_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data.img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 		}
 	}
 
@@ -801,7 +826,14 @@ int main(int argc, char **argv)
 			imx_header.boot_data.img[2].entry = 0;
 		}
 
-		imx_header.boot_data.img[2].flags = (ap_core & 0x7);
+		imx_header.boot_data.img[2].flags = (ap_core & BOOT_IMG_FLAGS_CORE_MASK);
+		if (ap_core == CORE_CA53)
+			imx_header.boot_data.img[2].flags |= (SC_R_A53_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+		else
+			imx_header.boot_data.img[2].flags |= (SC_R_A72_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+
+		imx_header.boot_data.img[2].flags |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+		imx_header.boot_data.img[2].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 	}
 
 	/* Open output file */
