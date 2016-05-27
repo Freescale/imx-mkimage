@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <sys/stat.h>
 #include <getopt.h>
 #include <errno.h>
@@ -25,12 +27,6 @@
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
-
-typedef unsigned int UINT32;
-typedef unsigned char uint8_t;
-typedef short unsigned int uint16_t;
-typedef unsigned int uint32_t;
-typedef long unsigned int uint64_t;
 
 typedef struct {
 	uint32_t addr;
@@ -132,7 +128,6 @@ typedef struct {
 #define DCD_CHECK_BITS_SET_PARAM	0x14
 #define DCD_CHECK_BITS_CLR_PARAM	0x04
 
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #define ALIGN(x,a)		__ALIGN_MASK((x),(__typeof__(x))(a)-1)
 #define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
 
@@ -666,7 +661,7 @@ int main(int argc, char **argv)
 				cm4_img = optarg;
 				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
 					cm4_core = strtol(argv[optind++], NULL, 0);
-					cm4_start_addr = strtol(argv[optind++], NULL, 0);
+					cm4_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
 					fprintf(stderr, "\tcore: %d", cm4_core);
 					fprintf(stderr, " addr: 0x%08x\n", cm4_start_addr);
 				} else {
@@ -683,7 +678,7 @@ int main(int argc, char **argv)
 					else
 						ap_core = CORE_CA72;
 
-					ap_start_addr = strtol(argv[optind++], NULL, 0);
+					ap_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
 
 					fprintf(stderr, "\tcore: %s",   (ap_core == CORE_CA53)? "a53":"a72");
 					fprintf(stderr, " addr: 0x%08x\n", ap_start_addr);
