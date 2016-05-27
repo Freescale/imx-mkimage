@@ -611,6 +611,7 @@ int main(int argc, char **argv)
 	int c, scfw_file_size, cm4_file_size = 0, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, ofd = -1;
 	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0;
 	char *ofname=NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL;
+    uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
 	struct stat sbuf;
 
@@ -621,6 +622,7 @@ int main(int argc, char **argv)
 		{"ap", required_argument, NULL, 'a'},
 		{"dcd", required_argument, NULL, 'd'},
 		{"out", required_argument, NULL, 'o'},
+		{"flags", required_argument, NULL, 'f'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -633,7 +635,7 @@ int main(int argc, char **argv)
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long_only (argc, argv, ":s:d:m:a:c:",
+		c = getopt_long_only (argc, argv, ":s:d:m:a:o:f:",
 			long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -686,6 +688,10 @@ int main(int argc, char **argv)
 					fprintf(stderr, "\n-ap option require THREE arguments: filename, a53/a72, start address in hex\n\n");
 					exit(1);
 				}
+				break;
+			case 'f':
+				fprintf(stderr, "FLAG:\t%s\n", optarg);
+    			flags = (uint32_t) strtoll(optarg, NULL, 0);
 				break;
 			case 'o':
 				fprintf(stderr, "Output:\t%s\n", optarg);
@@ -741,6 +747,7 @@ int main(int argc, char **argv)
 	imx_header.boot_data.img[0].flags = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
 	imx_header.boot_data.num_images++;
 	imx_header.boot_data.bd_size = sizeof(boot_data_v3_t);
+	imx_header.boot_data.bd_flags = flags;
 
 	if(cm4_img) {
 		cm4_fd = open(cm4_img, O_RDONLY | O_BINARY);
