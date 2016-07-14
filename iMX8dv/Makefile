@@ -1,7 +1,7 @@
 MKIMG = mkimage_imx8
 
-CC = gcc
-CFLAGS = -O2 -Wall -std=c99 -static
+CC ?= gcc
+CFLAGS ?= -O2 -Wall -std=c99 -static
 
 $(MKIMG): mkimage_imx8.c imx8dv_dcd.cfg
 	$(CC) -E -Wp,-MD,.imx8dv_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -x c -o imx8dv_dcd.cfg.tmp imx8dv_dcd.cfg
