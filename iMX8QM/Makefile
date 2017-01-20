@@ -14,11 +14,13 @@ $(MKIMG): mkimage_imx8qm.c $(DCD_CFG_SRC)
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8qm.c
 
 .PHONY: clean
-	
 clean:
 	@rm -f $(MKIMG) $(DCD_CFG) .imx8qm_dcd.cfg.cfgtmp.d
 
-flash_8qm: $(MKIMG) $(DCD_CFG)
+flash_8qm.bin: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	@echo "Creating bootable image flash_8qm.bin"
 	./$(MKIMG) -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash_8qm.bin
+
+.PHONY: all
+all: flash_8qm.bin
 
