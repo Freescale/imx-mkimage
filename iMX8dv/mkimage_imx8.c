@@ -251,7 +251,7 @@ copy_file (int ifd, const char *datafile, int pad, int offset)
 		}
 	}
 
-	(void) munmap((void *)ptr, sbuf.st_size+offset);
+	(void) munmap((void *)ptr, sbuf.st_size);
 	(void) close (dfd);
 }
 
