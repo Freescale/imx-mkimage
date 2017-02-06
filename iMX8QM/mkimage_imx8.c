@@ -1,6 +1,16 @@
+/*
+ * Copyright (C) 2016 Freescale Semiconductor, Inc.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
+ * derived from u-boot's mkimage utility
+ *
+ */
+
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 
 #define _GNU_SOURCE
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -14,18 +24,251 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 
-#include "utility.h"
-#include "boot.h"
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
+typedef struct {
+	uint32_t addr;
+	uint32_t value;
+} dcd_addr_data_t;
+
+typedef struct {
+	uint8_t tag;
+	uint16_t length;
+	uint8_t version;
+} __attribute__((packed)) ivt_header_t;
+
+typedef struct {
+	uint8_t tag;
+	uint16_t length;
+	uint8_t param;
+} __attribute__((packed)) write_dcd_command_t;
+
+#define MAX_NUM_IMGS 4
+#define MAX_HW_CFG_SIZE_V2 359
+struct dcd_v2_cmd {
+	write_dcd_command_t write_dcd_command; /*4*/
+	dcd_addr_data_t addr_data[MAX_HW_CFG_SIZE_V2]; /*2872*/
+} __attribute__((packed));
+
+typedef struct {
+	ivt_header_t header;   /*4*/
+	struct dcd_v2_cmd dcd_cmd; /*2876*/
+} __attribute__((packed)) dcd_v2_t;			/*2880*/
+
+typedef struct {
+	uint64_t src;		/*8*/
+	uint64_t dst;		/*8*/
+	uint64_t entry;		/*8*/
+	uint32_t size;		/*4*/
+	uint32_t flags;		/*4*/
+} __attribute__((packed)) boot_img_t;; /*32*/
+
+#define CORE_SC 	1
+#define CORE_CM4_0 	2
+#define CORE_CM4_1 	3
+#define CORE_CA53 	4
+#define CORE_CA72 	5
+
+#define BOOT_IMG_FLAGS_CORE_MASK	0xF
+#define BOOT_IMG_FLAGS_CPU_RID_MASK	0x3FF0
+#define BOOT_IMG_FLAGS_CPU_RID_SHIFT	4
+#define BOOT_IMG_FLAGS_MU_RID_MASK	0xFFC000
+#define BOOT_IMG_FLAGS_MU_RID_SHIFT	14
+#define BOOT_IMG_FLAGS_PARTITION_ID_MASK	0x1F000000
+#define BOOT_IMG_FLAGS_PARTITION_ID_SHIFT	24
+
+#define SC_R_A53_0	1
+#define SC_R_A72_0	6
+#define SC_R_MU_0A	213
+#define SC_R_M4_0_PID0	278
+#define SC_R_M4_0_MU_1A	297
+#define SC_R_M4_1_PID0	298
+#define SC_R_M4_1_MU_1A 317
+#define PARTITION_ID_M4	0
+#define PARTITION_ID_AP	1
+
+typedef struct {
+	uint32_t num_images;	/*4*/
+	uint32_t bd_size;	/*4*/
+	uint32_t bd_flags;	/*4*/
+	uint32_t reserved;	/*4*/
+	boot_img_t img[MAX_NUM_IMGS];	/*96*/
+	boot_img_t scd;                 /*32*/
+	boot_img_t csf;                 /*32*/
+	boot_img_t img_reserved;        /* Reserved for future, 32 */
+}  __attribute__((packed)) boot_data_v3_t;		/*128*/
+
+typedef struct {
+	ivt_header_t header;	/*4*/
+	uint32_t reserved1;	/*4*/
+	uint64_t dcd_ptr;	/*8*/
+	uint64_t boot_data_ptr;	/*8*/
+	uint64_t self;		/*8*/
+	uint64_t csf;		/*8*/
+	uint64_t scd;		/*8*/
+	uint64_t reserved2;	/*8*/
+	uint64_t reserved3;	/*8*/
+}  __attribute__((packed)) flash_header_v3_t;		/*64*/
+
+#define MAX_NUM_OF_CONTAINER    2
+
+typedef struct {
+	flash_header_v3_t fhdr[MAX_NUM_OF_CONTAINER];	/*64*/
+	boot_data_v3_t boot_data[MAX_NUM_OF_CONTAINER]; /*128*/
+	dcd_v2_t dcd_table; /*2880*/
+}  __attribute__((packed)) imx_header_v3_t; /*3072*/
+
+/* Command tags and parameters */
+#define IVT_HEADER_TAG			0xD1
+#define IVT_VERSION			0x43
+#define DCD_HEADER_TAG			0xD2
+#define DCD_VERSION			0x43
+#define DCD_WRITE_DATA_COMMAND_TAG	0xCC
+#define DCD_WRITE_DATA_PARAM		0x4
+#define DCD_WRITE_CLR_BIT_PARAM		0xC
+#define DCD_CHECK_DATA_COMMAND_TAG	0xCF
+#define DCD_CHECK_BITS_SET_PARAM	0x14
+#define DCD_CHECK_BITS_CLR_PARAM	0x04
+
+#define IVT_OFFSET_NAND     (0x400)
+#define IVT_OFFSET_I2C      (0x400)
+#define IVT_OFFSET_FLEXSPI  (0x1000)
+#define IVT_OFFSET_SD		(0x400)
+#define IVT_OFFSET_SATA		(0x400)
 
 #define CSF_DATA_SIZE       (0x4000)
 #define INITIAL_LOAD_ADDR_SCU_ROM 0x3100e000
 #define INITIAL_LOAD_ADDR_AP_ROM 0x00110000
 #define IMG_AUTO_ALIGN 0x10
 
-imx_header_v3_t imx_header;
-img_container_opts_t container_opts[MAX_NUM_OF_CONTAINER];
-img_misc_opts    misc_opts;
-unsigned int g_iContainer;
+#define ALIGN(x,a)		__ALIGN_MASK((x),(__typeof__(x))(a)-1)
+#define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
+
+#define uswap_16(x) \
+	((((x) & 0xff00) >> 8) | \
+	 (((x) & 0x00ff) << 8))
+#define uswap_32(x) \
+	((((x) & 0xff000000) >> 24) | \
+	 (((x) & 0x00ff0000) >>  8) | \
+	 (((x) & 0x0000ff00) <<  8) | \
+	 (((x) & 0x000000ff) << 24))
+#define _uswap_64(x, sfx) \
+	((((x) & 0xff00000000000000##sfx) >> 56) | \
+	 (((x) & 0x00ff000000000000##sfx) >> 40) | \
+	 (((x) & 0x0000ff0000000000##sfx) >> 24) | \
+	 (((x) & 0x000000ff00000000##sfx) >>  8) | \
+	 (((x) & 0x00000000ff000000##sfx) <<  8) | \
+	 (((x) & 0x0000000000ff0000##sfx) << 24) | \
+	 (((x) & 0x000000000000ff00##sfx) << 40) | \
+	 (((x) & 0x00000000000000ff##sfx) << 56))
+
+#if defined(__GNUC__)
+# define uswap_64(x) _uswap_64(x, ull)
+#else
+#error
+# define uswap_64(x) _uswap_64(x, )
+#endif
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+# define cpu_to_le16(x)		(x)
+# define cpu_to_le32(x)		(x)
+# define cpu_to_le64(x)		(x)
+# define le16_to_cpu(x)		(x)
+# define le32_to_cpu(x)		(x)
+# define le64_to_cpu(x)		(x)
+# define cpu_to_be16(x)		uswap_16(x)
+# define cpu_to_be32(x)		uswap_32(x)
+# define cpu_to_be64(x)		uswap_64(x)
+# define be16_to_cpu(x)		uswap_16(x)
+# define be32_to_cpu(x)		uswap_32(x)
+# define be64_to_cpu(x)		uswap_64(x)
+#else
+#error
+# define cpu_to_le16(x)		uswap_16(x)
+# define cpu_to_le32(x)		uswap_32(x)
+# define cpu_to_le64(x)		uswap_64(x)
+# define le16_to_cpu(x)		uswap_16(x)
+# define le32_to_cpu(x)		uswap_32(x)
+# define le64_to_cpu(x)		uswap_64(x)
+# define cpu_to_be16(x)		(x)
+# define cpu_to_be32(x)		(x)
+# define cpu_to_be64(x)		(x)
+# define be16_to_cpu(x)		(x)
+# define be32_to_cpu(x)		(x)
+# define be64_to_cpu(x)		(x)
+#endif
+
+#define UNDEFINED 0xFFFFFFFF
+
+static void
+copy_file (int ifd, const char *datafile, int pad, int offset)
+{
+	int dfd;
+	struct stat sbuf;
+	unsigned char *ptr;
+	int tail;
+	int zero = 0;
+	uint8_t zeros[4096];
+	int size;
+
+	memset(zeros, 0, sizeof(zeros));
+
+	if ((dfd = open(datafile, O_RDONLY|O_BINARY)) < 0) {
+		fprintf (stderr, "Can't open %s: %s\n",
+			datafile, strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	if (fstat(dfd, &sbuf) < 0) {
+		fprintf (stderr, "Can't stat %s: %s\n",
+			datafile, strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	ptr = mmap(0, sbuf.st_size, PROT_READ, MAP_SHARED, dfd, 0);
+	if (ptr == MAP_FAILED) {
+		fprintf (stderr, "Can't read %s: %s\n",
+			datafile, strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	size = sbuf.st_size;
+	lseek(ifd, offset, SEEK_SET);
+	if (write(ifd, ptr, size) != size) {
+		fprintf (stderr, "Write error %s\n",
+			strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	tail = size % 4;
+	pad = pad - size;
+	if ((pad == 1) && (tail != 0)) {
+
+		if (write(ifd, (char *)&zero, 4-tail) != 4-tail) {
+			fprintf (stderr, "Write error on %s\n",
+				strerror(errno));
+			exit (EXIT_FAILURE);
+		}
+	} else if (pad > 1) {
+		while (pad > 0) {
+			int todo = sizeof(zeros);
+
+			if (todo > pad)
+				todo = pad;
+			if (write(ifd, (char *)&zeros, todo) != todo) {
+				fprintf(stderr, "Write error: %s\n",
+					strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			pad -= todo;
+		}
+	}
+
+	(void) munmap((void *)ptr, sbuf.st_size+offset);
+	(void) close (dfd);
+}
 
 enum imximage_fld_types {
 	CFG_INVALID = -1,
@@ -37,30 +280,42 @@ enum imximage_fld_types {
 
 enum imximage_cmd {
 	CMD_INVALID,
+	CMD_IMAGE_VERSION,
+	CMD_BOOT_FROM,
+	CMD_BOOT_OFFSET,
 	CMD_WRITE_DATA,
 	CMD_WRITE_CLR_BIT,
 	CMD_CHECK_BITS_SET,
 	CMD_CHECK_BITS_CLR,
+	CMD_CSF,
+	CMD_PLUGIN,
 };
 
 typedef struct table_entry {
 	int	id;
-	char *sname;		/* short (input) name to find table entry */
-	char *lname;		/* long (output) name to print for messages */
+	char	*sname;		/* short (input) name to find table entry */
+	char	*lname;		/* long (output) name to print for messages */
 } table_entry_t;
 
 /*
  * Supported commands for configuration file
  */
 static table_entry_t imximage_cmds[] = {
+	{CMD_BOOT_FROM,         "BOOT_FROM",            "boot command",	  },
+	{CMD_BOOT_OFFSET,       "BOOT_OFFSET",          "Boot offset",	  },
 	{CMD_WRITE_DATA,        "DATA",                 "Reg Write Data", },
 	{CMD_WRITE_CLR_BIT,     "CLR_BIT",              "Reg clear bit",  },
 	{CMD_CHECK_BITS_SET,    "CHECK_BITS_SET",   "Reg Check bits set", },
 	{CMD_CHECK_BITS_CLR,    "CHECK_BITS_CLR",   "Reg Check bits clr", },
+	{CMD_CSF,               "CSF",           "Command Sequence File", },
+	{CMD_IMAGE_VERSION,     "IMAGE_VERSION",        "image version",  },
 	{-1,                    "",                     "",	          },
 };
 
+static uint32_t imximage_version;
 static struct dcd_v2_cmd *gd_last_cmd;
+static uint32_t imximage_ivt_offset = UNDEFINED;
+static uint32_t imximage_csf_size = UNDEFINED;
 
 int get_table_entry_id(const table_entry_t *table,
 		const char *table_name, const char *name)
@@ -90,9 +345,35 @@ static uint32_t get_cfg_value(char *token, char *name,  int linenr)
 	return value;
 }
 
-static void set_dcd_param_v2(dcd_v2_t *dcd_v2, uint32_t dcd_len,
+static void set_imx_hdr_v3(imx_header_v3_t *imxhdr, uint32_t dcd_len,
+		uint32_t flash_offset, uint32_t hdr_base, uint32_t cont_id)
+{
+	flash_header_v3_t *fhdr_v3 = &imxhdr->fhdr[cont_id];
+
+	/* Set magic number */
+	fhdr_v3->header.tag = IVT_HEADER_TAG; /* 0xD1 */
+	fhdr_v3->header.length = cpu_to_be16(sizeof(flash_header_v3_t));
+	fhdr_v3->header.version = IVT_VERSION; /* 0x40 */
+
+	fhdr_v3->reserved1 = fhdr_v3->reserved2 = fhdr_v3->reserved3 = 0;
+
+	fhdr_v3->self = hdr_base + flash_offset + cont_id * sizeof(flash_header_v3_t);
+	if (dcd_len > 0)
+		fhdr_v3->dcd_ptr = hdr_base + flash_offset +
+			offsetof(imx_header_v3_t, dcd_table);
+	else
+		fhdr_v3->dcd_ptr = 0;
+	fhdr_v3->boot_data_ptr = hdr_base + flash_offset
+			+ offsetof(imx_header_v3_t, boot_data) + cont_id * sizeof(boot_data_v3_t);
+
+	fhdr_v3->csf = 0;
+	fhdr_v3->scd = 0;
+}
+
+static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 		int32_t cmd)
 {
+	dcd_v2_t *dcd_v2 = &imxhdr->dcd_table;
 	struct dcd_v2_cmd *d = gd_last_cmd;
 	struct dcd_v2_cmd *d2;
 	int len;
@@ -144,7 +425,7 @@ static void set_dcd_param_v2(dcd_v2_t *dcd_v2, uint32_t dcd_len,
 	gd_last_cmd = d;
 }
 
-static void set_dcd_val_v2(char *name, int lineno,
+static void set_dcd_val_v2(imx_header_v3_t *imxhdr, char *name, int lineno,
 					int fld, uint32_t value, uint32_t off)
 {
 	struct dcd_v2_cmd *d = gd_last_cmd;
@@ -168,9 +449,10 @@ static void set_dcd_val_v2(char *name, int lineno,
 	}
 }
 
-static void set_dcd_rst_v2(dcd_v2_t *dcd_v2, uint32_t dcd_len,
+static void set_dcd_rst_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 						char *name, int lineno)
 {
+	dcd_v2_t *dcd_v2 = &imxhdr->dcd_table;
 	struct dcd_v2_cmd *d = gd_last_cmd;
 	int len;
 
@@ -187,27 +469,53 @@ static void set_dcd_rst_v2(dcd_v2_t *dcd_v2, uint32_t dcd_len,
 	dcd_v2->header.version = DCD_VERSION;
 }
 
-static void parse_cfg_cmd(dcd_v2_t *dcd_v2, int32_t cmd, char *token,
+static void parse_cfg_cmd(imx_header_v3_t *imxhdr, int32_t cmd, char *token,
 				char *name, int lineno, int fld, int dcd_len)
 {
 	int value;
 	static int cmd_ver_first = ~0;
 
 	switch (cmd) {
+	case CMD_IMAGE_VERSION:
+		imximage_version = get_cfg_value(token, name, lineno);
+		if (cmd_ver_first == 0) {
+			fprintf(stderr, "Error: %s[%d] - IMAGE_VERSION "
+				"command need be the first before other "
+				"valid command in the file\n", name, lineno);
+			exit(EXIT_FAILURE);
+		}
+		cmd_ver_first = 1;
+		break;
+	case CMD_BOOT_OFFSET:
+		imximage_ivt_offset = get_cfg_value(token, name, lineno);
+		if (cmd_ver_first != 1)
+			cmd_ver_first = 0;
+		break;
 	case CMD_WRITE_DATA:
 	case CMD_WRITE_CLR_BIT:
 	case CMD_CHECK_BITS_SET:
 	case CMD_CHECK_BITS_CLR:
 		value = get_cfg_value(token, name, lineno);
-		set_dcd_param_v2(dcd_v2, dcd_len, cmd);
-		set_dcd_val_v2(name, lineno, fld, value, dcd_len);
+		set_dcd_param_v2(imxhdr, dcd_len, cmd);
+		set_dcd_val_v2(imxhdr, name, lineno, fld, value, dcd_len);
+		if (cmd_ver_first != 1)
+			cmd_ver_first = 0;
+		break;
+	case CMD_CSF:
+		if (imximage_version != 2) {
+			fprintf(stderr,
+				"Error: %s[%d] - CSF only supported for VERSION 2(%s)\n",
+				name, lineno, token);
+			exit(EXIT_FAILURE);
+		}
+		imximage_csf_size = get_cfg_value(token, name, lineno);
 		if (cmd_ver_first != 1)
 			cmd_ver_first = 0;
 		break;
 	}
 }
 
-static void parse_cfg_fld(dcd_v2_t *dcd_v2, int32_t *cmd,
+static void parse_cfg_fld(imx_header_v3_t *imxhdr, int32_t *cmd,
 		char *token, char *name, int lineno, int fld, int *dcd_len)
 {
 	int value;
@@ -223,7 +531,7 @@ static void parse_cfg_fld(dcd_v2_t *dcd_v2, int32_t *cmd,
 		}
 		break;
 	case CFG_REG_SIZE:
-		parse_cfg_cmd(dcd_v2, *cmd, token, name, lineno, fld, *dcd_len);
+		parse_cfg_cmd(imxhdr, *cmd, token, name, lineno, fld, *dcd_len);
 		break;
 	case CFG_REG_ADDRESS:
 	case CFG_REG_VALUE:
@@ -234,8 +542,8 @@ static void parse_cfg_fld(dcd_v2_t *dcd_v2, int32_t *cmd,
 		case CMD_CHECK_BITS_CLR:
 
 			value = get_cfg_value(token, name, lineno);
-			set_dcd_param_v2(dcd_v2, *dcd_len, *cmd);
-			set_dcd_val_v2(name, lineno, fld, value,
+			set_dcd_param_v2(imxhdr, *dcd_len, *cmd);
+			set_dcd_val_v2(imxhdr, name, lineno, fld, value,
 					*dcd_len);
 
 			if (fld == CFG_REG_VALUE) {
@@ -257,18 +565,7 @@ static void parse_cfg_fld(dcd_v2_t *dcd_v2, int32_t *cmd,
 	}
 }
 
-#define OPEN_FILE_GET_SZ(name, fp, size, rw)    \
-	do {        \
-		uint32_t local_sz = 0;    \
-		if(NULL != name){    \
-			fp = fopen(name, rw);    \
-			if(NULL == fp) { printf("Failed to open %s\n", name); return -2;}    \
-			fseek(fp, 0, SEEK_END);    local_sz = ftell(fp);    fseek(fp, 0, SEEK_SET);    \
-			size = local_sz;    \
-		}    \
-	} while(0)
-
-static uint32_t parse_cfg_file(dcd_v2_t *dcd_v2, char *name)
+static uint32_t parse_cfg_file(imx_header_v3_t *imxhdr, char *name)
 {
 	FILE *fd = NULL;
 	char *line = NULL;
@@ -307,13 +604,13 @@ static uint32_t parse_cfg_file(dcd_v2_t *dcd_v2, char *name)
 			if (token[0] == '#')
 				break;
 
-			parse_cfg_fld(dcd_v2, &cmd, token, name,
+			parse_cfg_fld(imxhdr, &cmd, token, name,
 					lineno, fld, &dcd_len);
 		}
 
 	}
 
-	set_dcd_rst_v2(dcd_v2, dcd_len, name, lineno);
+	set_dcd_rst_v2(imxhdr, dcd_len, name, lineno);
 	fclose(fd);
 
 	return dcd_len;
@@ -321,224 +618,361 @@ static uint32_t parse_cfg_file(dcd_v2_t *dcd_v2, char *name)
 
 int main(int argc, char **argv)
 {
-	int i = 0, j = 0;
-	char *out_buf = NULL;
-	uint32_t out_buf_sz, pos;
+	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1;
+	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0;
+	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL;
+    uint32_t flags = 0;
+	static imx_header_v3_t imx_header;
+	uint32_t ivt_offset = IVT_OFFSET_SD;
+	uint32_t sector_size = 0x200;
+	struct stat sbuf;
+	uint64_t tmp_to;
 
-	flash_header_v3_t *fhdr_v3 = NULL;
-	boot_data_v3_t *boot_data = NULL;
-	uint32_t hdr_base = 0, dcd_len;
-	size_t file_sz;
+	static struct option long_options[] =
+	{
+		{"scfw", required_argument, NULL, 's'},
+		{"m4", required_argument, NULL, 'm'},
+		{"ap", required_argument, NULL, 'a'},
+		{"dcd", required_argument, NULL, 'd'},
+		{"out", required_argument, NULL, 'o'},
+		{"flags", required_argument, NULL, 'f'},
+		{"scd", required_argument, NULL, 'x'},
+		{"csf", required_argument, NULL, 'c'},
+		{NULL, 0, NULL, 0}
+	};
 
 	memset((char*)&imx_header, 0, sizeof(imx_header_v3_t));
-	memset((char*)&container_opts, 0, sizeof(container_opts));
 
-	if (0 != get_options(argc, argv)){
-		return -1;
-	}
+	//fprintf(stderr, "imx_header_v3_t size %lu boot_data_v3_t = %lu flash_header_v3_t = %lu\n",
+	//	sizeof(imx_header_v3_t), sizeof(boot_data_v3_t), sizeof(flash_header_v3_t));
 
-	container_opts[0].hdr_base = INITIAL_LOAD_ADDR_SCU_ROM + misc_opts.ivt_off;
-	container_opts[1].hdr_base = INITIAL_LOAD_ADDR_AP_ROM + misc_opts.ivt_off;
+	while(1)
+    	{
+		/* getopt_long stores the option index here. */
+		int option_index = 0;
 
-	/* The sub imgs needs to align with sector size */
-	out_buf_sz = ALIGN(sizeof(imx_header_v3_t) + misc_opts.ivt_off, misc_opts.sector_size);
-	pos = out_buf_sz;
+		c = getopt_long_only (argc, argv, ":s:d:m:a:o:f:x:c:",
+			long_options, &option_index);
 
-	if ((container_opts[0].img[0].core == CORE_SECO) ||
-		(container_opts[0].img[0].core == CORE_HDMI_TX_uCPU) ||
-		(container_opts[0].img[0].core == CORE_HDMI_RX_uCPU)) {
-		out_buf_sz = 0x200;
-		pos = 0x200;
-		misc_opts.ivt_off = 0;
-		misc_opts.sector_size = 0x4;
-	}
+		/* Detect the end of the options. */
+		if (c == -1)
+		break;
 
-	mkimg_debug("out buf size: 0x%x, sector_size 0x%x\n", out_buf_sz, misc_opts.sector_size);
-
-	for (i = 0; i < g_iContainer; i++){
-		OPEN_FILE_GET_SZ(container_opts[i].scd_file, container_opts[i].fp_scd, container_opts[i].scd_sz, "rb");
-		if (container_opts[i].scd_sz) {
-			out_buf_sz += ALIGN(container_opts[i].scd_sz, misc_opts.sector_size);
-
-			mkimg_debug("scd size: 0x%x\n", container_opts[i].scd_sz);
-			mkimg_debug("out buf size involved scd: 0x%x\n", out_buf_sz);
-		}
-
-		/* Will append the CSF at the end, to avoid CSF size aligned with sector size */
-		OPEN_FILE_GET_SZ(container_opts[i].csf_file, container_opts[i].fp_csf, container_opts[i].csf_sz, "rb");
-		if (container_opts[i].csf_sz) {
-
-			out_buf_sz += CSF_DATA_SIZE;
-			
-			mkimg_debug("csf size: 0x%x\n", CSF_DATA_SIZE);
-			mkimg_debug("out buf size involved csf: 0x%x\n", out_buf_sz);
-		}
-		
-		for(j = 0; j < container_opts[i].img_num; j++){
-			OPEN_FILE_GET_SZ(container_opts[i].img[j].img_file, container_opts[i].img[j].fp_img, container_opts[i].img[j].img_sz, "rb");
-			out_buf_sz += ALIGN(container_opts[i].img[j].img_sz, misc_opts.sector_size);
-			
-			mkimg_debug("container%d img%d size: 0x%x\n", i, j, container_opts[i].img[j].img_sz);
-			mkimg_debug("out buf size involved container%d boot img%d: 0x%x\n", i, j, out_buf_sz);
-
-			if (container_opts[i].img[j].core == CORE_SC) {
-				uint64_t tmp_to = ALIGN((container_opts[i].img[j].to + container_opts[i].img[j].img_sz), 4);
-
-				/* When scd_to is 0, put the SCD load address after SCU image */
-				if (container_opts[i].scd_sz && !container_opts[i].scd_to) {
-					container_opts[i].scd_to = tmp_to;
-					tmp_to = ALIGN((container_opts[i].scd_to + container_opts[i].scd_sz), IMG_AUTO_ALIGN);
+		switch (c)
+		{
+			case 0:
+				fprintf(stderr, "option %s", long_options[option_index].name);
+				if (optarg)
+					fprintf(stderr, " with arg %s", optarg);
+				fprintf(stderr, "\n");
+				break;
+			case 's':
+				fprintf(stderr, "SCFW:\t%s\n", optarg);
+				scfw_img = optarg;
+				break;
+			case 'd':
+				fprintf(stderr, "DCD:\t%s\n", optarg);
+				dcd_img = optarg;
+				break;
+			case 'm':
+				fprintf(stderr, "CM4:\t%s", optarg);
+				cm4_img = optarg;
+				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
+					cm4_core = strtol(argv[optind++], NULL, 0);
+					cm4_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
+					fprintf(stderr, "\tcore: %d", cm4_core);
+					fprintf(stderr, " addr: 0x%08x\n", cm4_start_addr);
+				} else {
+					fprintf(stderr, "\n-m4 option require THREE arguments: filename, core: 0/1, start address in hex\n\n");
+					exit(1);
 				}
+				break;
+			case 'a':
+				fprintf(stderr, "AP:\t%s", optarg);
+				ap_img = optarg;
+				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
+					if(!strncmp(argv[optind++], "a53", 3))
+						ap_core = CORE_CA53;
+					else
+						ap_core = CORE_CA72;
 
-				/* When csf_to is 0, put the CSF load address after SCU image */
-				if (container_opts[i].csf_sz && !container_opts[i].csf_to) {
-					container_opts[i].csf_to = tmp_to;
-					tmp_to = ALIGN((container_opts[i].csf_to + container_opts[i].csf_sz), IMG_AUTO_ALIGN);
+					ap_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
+
+					fprintf(stderr, "\tcore: %s",   (ap_core == CORE_CA53)? "a53":"a72");
+					fprintf(stderr, " addr: 0x%08x\n", ap_start_addr);
+				} else {
+					fprintf(stderr, "\n-ap option require THREE arguments: filename, a53/a72, start address in hex\n\n");
+					exit(1);
 				}
-			}
+				break;
+			case 'f':
+				fprintf(stderr, "FLAG:\t%s\n", optarg);
+    			flags = (uint32_t) strtoll(optarg, NULL, 0);
+				break;
+			case 'o':
+				fprintf(stderr, "Output:\t%s\n", optarg);
+				ofname = optarg;
+				break;
+			case 'x':
+				fprintf(stderr, "SCD:\t%s\n", optarg);
+				scd_img = optarg;
+				break;
+			case 'c':
+				fprintf(stderr, "CSF:\t%s\n", optarg);
+				csf_img = optarg;
+				break;
+			case ':':
+				fprintf(stderr, "option %c missing arguments\n", optopt);
+				break;
+			case '?':
+			default:
+				/* invalid option */
+				fprintf(stderr, "option '%c' is invalid: ignored\n",
+					optopt);
+				exit(1);
 		}
 	}
 
-#ifdef DEBUG
-	dump_img_container();
-#endif
+	file_off = ALIGN(sizeof(imx_header_v3_t) + ivt_offset, sector_size);
 
-	out_buf = (char*)calloc(1, out_buf_sz);
-	if (NULL == out_buf) {
-		fprintf(stderr, "Failed to calloc memory.\n ");
+	if((scfw_img == NULL) || (ofname == NULL))
+	{
+		fprintf(stderr, "mandatory args scfw and output file name missing! abort\n");
+		exit(1);
+	}
+
+	scfw_fd = open(scfw_img, O_RDONLY | O_BINARY);
+	if (scfw_fd < 0) {
+		fprintf(stderr, "%s: Can't open: %s\n",
+                                scfw_img, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
-	mkimg_debug("out buf addr: 0x%x\n", (uint32_t)out_buf);
+	if (fstat(scfw_fd, &sbuf) < 0) {
+		fprintf(stderr, "%s: Can't stat: %s\n",
+				scfw_img, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	close(scfw_fd);
 
-	for (i = 0; i < g_iContainer; i++) {
-		mkimg_debug("container_opts[%d].hdr_base=0x%x\n", i, container_opts[i].hdr_base);
-
-		hdr_base = container_opts[i].hdr_base;
-		fhdr_v3 = &imx_header.fhdr[i];
-		boot_data =  &imx_header.boot_data[i];
-
-		fhdr_v3->header.tag = IVT_HEADER_TAG; /* 0xD1 */
-		fhdr_v3->header.length = cpu_to_be16(sizeof(flash_header_v3_t));
-		fhdr_v3->header.version = IVT_VERSION; /* 0x43 */
-		fhdr_v3->reserved1 = fhdr_v3->reserved2 = fhdr_v3->reserved3 = 0;
-		fhdr_v3->self = (hdr_base + (i * sizeof(flash_header_v3_t)));
-
-		/* Only  container 0 supports DCD */
-		if (i == 0 && container_opts[i].dcd_file){
-			dcd_len = parse_cfg_file(&imx_header.dcd_table, container_opts[i].dcd_file);
-			if (dcd_len)
-				fhdr_v3->dcd_ptr = hdr_base + offsetof(imx_header_v3_t, dcd_table);
-			else
-				fhdr_v3->dcd_ptr = 0;
-			mkimg_debug("dcd len = %d\n", dcd_len);
-		} else {
-			fhdr_v3->dcd_ptr = 0;
-	        mkimg_debug("No dcd\n");
-		}
-
-		fhdr_v3->boot_data_ptr = hdr_base + offsetof(imx_header_v3_t, boot_data) + sizeof(boot_data_v3_t)*i;
-
-		for (j = 0; j < container_opts[i].img_num; j++){
-			boot_data->num_images = container_opts[i].img_num;
-			boot_data->bd_size = sizeof(boot_data_v3_t);
-
-			/* The src is a offset from image_offset, not the absolut offset from 0 */
-			boot_data->img[j].src = ALIGN(pos, misc_opts.sector_size);
-			boot_data->img[j].dst = container_opts[i].img[j].to;
-			boot_data->img[j].entry = container_opts[i].img[j].entry;
-			boot_data->img[j].size = container_opts[i].img[j].img_sz;
-			boot_data->img[j].flags = 0;
-			boot_data->img[j].flags |= (container_opts[i].img[j].mu << BOOT_IMG_FLAGS_MU_RID_SHIFT) & BOOT_IMG_FLAGS_MU_RID_MASK;
-			boot_data->img[j].flags |= (container_opts[i].img[j].part << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT) & BOOT_IMG_FLAGS_PARTITION_ID_MASK;
-			boot_data->img[j].flags |= container_opts[i].img[j].core & BOOT_IMG_FLAGS_CORE_MASK;
-			boot_data->img[j].flags |= (container_opts[i].img[j].cpu_id << BOOT_IMG_FLAGS_CPU_RID_SHIFT) & BOOT_IMG_FLAGS_CPU_RID_MASK;
-
-			file_sz = fread(out_buf + pos, 1, container_opts[i].img[j].img_sz, container_opts[i].img[j].fp_img);
-			fclose(container_opts[i].img[j].fp_img);
-
-			if (file_sz != container_opts[i].img[j].img_sz) {
-				fprintf(stderr, "File %s reading error\n", container_opts[i].img[j].img_file);
-				exit(EXIT_FAILURE);
-			}
-
-			mkimg_debug("container%d img%d: off:0x%x, dst: 0x%x, entry: 0x%x, size: 0x%x, pos: 0x%x\n",
-				i, j,
-				(uint32_t)(boot_data->img[j].src),
-				(uint32_t)(boot_data->img[j].dst),
-				(uint32_t)(boot_data->img[j].entry),
-				boot_data->img[j].size,
-				pos);
-
-			mkimg_debug("container%d img%d buf addr : 0x%x\n", i, j, (unsigned int)(out_buf + pos));
-			
-			pos += ALIGN(container_opts[i].img[j].img_sz, misc_opts.sector_size);
-		}
-
-	    if (container_opts[i].scd_sz){
-			fhdr_v3->scd = container_opts[i].scd_to;
-			boot_data->scd.src = ALIGN(pos, misc_opts.sector_size);
-			boot_data->scd.dst = container_opts[i].scd_to;
-			boot_data->scd.size = container_opts[i].scd_sz;
-			
-			file_sz = fread(out_buf + pos, 1, container_opts[i].scd_sz, container_opts[i].fp_scd);
-			fclose(container_opts[i].fp_scd);
-
-			if (file_sz != container_opts[i].scd_sz) {
-				fprintf(stderr, "File %s reading error\n", container_opts[i].scd_file);
-				exit(EXIT_FAILURE);
-			}
-			
-			mkimg_debug("scd off: 0x%x, dst: 0x%x, size: 0x%x, pos: 0x%x\n",
-				(uint32_t)(boot_data->scd.src),
-				(uint32_t)(boot_data->scd.dst),
-				boot_data->scd.size,
-				pos);
-			
-			pos += ALIGN(container_opts[i].scd_sz, misc_opts.sector_size);
-	    } else {
-			fhdr_v3->scd = 0;
-			mkimg_debug("No scd\n");
-	    }
-
-	    if (container_opts[i].csf_sz){
-			fhdr_v3->csf = container_opts[i].csf_to;
-			boot_data->csf.src = ALIGN(pos, misc_opts.sector_size);
-			boot_data->csf.dst = container_opts[i].csf_to;
-			boot_data->csf.size = CSF_DATA_SIZE;
-			
-			file_sz = fread(out_buf + pos, 1, container_opts[i].csf_sz, container_opts[i].fp_csf);
-			fclose(container_opts[i].fp_csf);
-
-			if (file_sz != container_opts[i].csf_sz) {
-				fprintf(stderr, "File %s reading error\n", container_opts[i].csf_file);
-				exit(EXIT_FAILURE);
-			}
-
-			mkimg_debug("csf off: 0x%x, dst: 0x%x, size: 0x%x, pos: 0x%x\n",
-				(uint32_t)(boot_data->csf.src),
-				(uint32_t)(boot_data->csf.dst),
-				boot_data->csf.size,
-				pos);
-			pos += CSF_DATA_SIZE;
-	    } else {
-			fhdr_v3->csf = 0;
-			mkimg_debug("No csf\n");
-	    }
+	if(dcd_img) {
+		dcd_len = parse_cfg_file(&imx_header, dcd_img);
+	        fprintf(stderr, "dcd len = %d\n", dcd_len);
 	}
 
-	dump_imx_header_v3(&imx_header);
+	set_imx_hdr_v3(&imx_header, dcd_len, ivt_offset, INITIAL_LOAD_ADDR_SCU_ROM, 0);
+	set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_AP_ROM, 1);
 
-	if ((container_opts[0].img[0].core == CORE_SECO) ||
-	    (container_opts[0].img[0].core == CORE_HDMI_TX_uCPU) ||
-	    (container_opts[0].img[0].core == CORE_HDMI_RX_uCPU))
-		memcpy(out_buf + misc_opts.ivt_off, (char *)&imx_header, 0x200);
-	else
-		memcpy(out_buf + misc_opts.ivt_off, (char *)&imx_header, sizeof(imx_header));
+	fprintf(stderr, "scfw size = %ld\n", sbuf.st_size);
 
-	FILE *fp_out = fopen("flash.bin", "wb");
-	fwrite(out_buf, out_buf_sz, 1, fp_out);
-	fclose(fp_out);
+	imx_header.boot_data[0].img[0].src = file_off;
+	imx_header.boot_data[0].img[0].dst = 0x30fe0000;
+	imx_header.boot_data[0].img[0].entry = 0x1ffe0000;
+	imx_header.boot_data[0].img[0].size = sbuf.st_size;
+	imx_header.boot_data[0].img[0].flags = 0;
+	imx_header.boot_data[0].img[0].flags = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
+	imx_header.boot_data[0].num_images++;
+	imx_header.boot_data[0].bd_size = sizeof(boot_data_v3_t);
+	imx_header.boot_data[0].bd_flags = flags;
 
-    return 0;
+	tmp_to = ALIGN((imx_header.boot_data[0].img[0].dst + sbuf.st_size), IMG_AUTO_ALIGN);
+	file_off += ALIGN(sbuf.st_size, sector_size);
+
+	if(cm4_img) {
+		cm4_fd = open(cm4_img, O_RDONLY | O_BINARY);
+		if (cm4_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                cm4_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(cm4_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				cm4_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(cm4_fd);
+
+		//fprintf(stderr, "cm4 size = %d\n", (int)sbuf.st_size);
+
+		imx_header.boot_data[0].img[1].src = file_off;
+		imx_header.boot_data[0].img[1].dst = cm4_start_addr;
+		imx_header.boot_data[0].img[1].entry = 0x1FFE0000;
+		imx_header.boot_data[0].img[1].size = sbuf.st_size;
+		imx_header.boot_data[0].num_images++;	
+
+		if(cm4_core == 0) {
+			if(cm4_start_addr == 0x38fe0000) {
+				fprintf(stderr, "! Invalid CM4_0 start address\n");
+				exit(EXIT_FAILURE);
+			}
+			imx_header.boot_data[0].img[1].flags = (CORE_CM4_0 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_0_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_0_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data[0].img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+		}
+		else {
+			if(cm4_start_addr == 0x34fe0000) {
+				fprintf(stderr, "! Invalid CM4_1 start address\n");
+				exit(EXIT_FAILURE);
+			}
+			imx_header.boot_data[0].img[1].flags = (CORE_CM4_1 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_1_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_1_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data[0].img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+		}
+
+		file_off += ALIGN(sbuf.st_size, sector_size);
+	}
+
+	if((ap_core == CORE_CA72) || (ap_core == CORE_CA53))
+	{
+		//printf("Note: Ignoring CM4_0 and CA53 images\n");
+		//printf("Special case for DDR stress test tool\n");
+
+		if(strncmp(ap_img, "null", 4)) {
+			ap_fd = open(ap_img, O_RDONLY | O_BINARY);
+			if (ap_fd < 0) {
+				fprintf(stderr, "%s: Can't open: %s\n",
+                                	ap_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			if (fstat(ap_fd, &sbuf) < 0) {
+				fprintf(stderr, "%s: Can't stat: %s\n",
+					ap_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			close(ap_fd);
+
+			imx_header.boot_data[1].img[0].src = file_off;
+			imx_header.boot_data[1].img[0].dst = ap_start_addr;
+			imx_header.boot_data[1].img[0].size = sbuf.st_size;
+			imx_header.boot_data[1].img[0].entry = ap_start_addr;
+			imx_header.boot_data[1].num_images++;	
+			imx_header.boot_data[1].bd_size = sizeof(boot_data_v3_t);
+			imx_header.boot_data[1].bd_flags = 0;
+			//fprintf(stderr, "ap img size = %d\n", (int)sbuf.st_size);
+
+			file_off += ALIGN(sbuf.st_size, sector_size);
+		}
+		else {
+			imx_header.boot_data[1].img[0].src = 0;
+			imx_header.boot_data[1].img[0].dst = 0;
+			imx_header.boot_data[1].img[0].size = 0;
+			imx_header.boot_data[1].img[0].entry = 0;
+			imx_header.boot_data[1].num_images = 0;
+			imx_header.boot_data[1].bd_size = sizeof(boot_data_v3_t);
+			imx_header.boot_data[1].bd_flags = 0;
+		}
+
+		imx_header.boot_data[1].img[0].flags = (ap_core & BOOT_IMG_FLAGS_CORE_MASK);
+		if (ap_core == CORE_CA53)
+			imx_header.boot_data[1].img[0].flags |= (SC_R_A53_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+		else
+			imx_header.boot_data[1].img[0].flags |= (SC_R_A72_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+
+		imx_header.boot_data[1].img[0].flags |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+		imx_header.boot_data[1].img[0].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+	}
+
+	if (scd_img) {
+		scd_fd = open(scd_img, O_RDONLY | O_BINARY);
+		if (scd_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                scd_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(scd_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				scd_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(scd_fd);
+
+		imx_header.boot_data[0].scd.src = file_off;
+		imx_header.boot_data[0].scd.dst = tmp_to;
+		imx_header.boot_data[0].scd.size = sbuf.st_size;
+		imx_header.fhdr[0].scd = imx_header.boot_data[0].scd.dst;	
+
+		tmp_to = ALIGN((tmp_to + sbuf.st_size), IMG_AUTO_ALIGN);
+		file_off += ALIGN(sbuf.st_size, sector_size);
+	}
+
+	if (csf_img) {
+		csf_fd = open(csf_img, O_RDONLY | O_BINARY);
+		if (csf_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                csf_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(csf_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				csf_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(csf_fd);
+
+		if (sbuf.st_size > CSF_DATA_SIZE) {
+			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+				csf_img, sbuf.st_size, CSF_DATA_SIZE);
+			exit(EXIT_FAILURE);
+		}
+
+		imx_header.boot_data[0].csf.src = file_off;
+		imx_header.boot_data[0].csf.dst = tmp_to;
+		imx_header.boot_data[0].csf.size = CSF_DATA_SIZE;
+		imx_header.fhdr[0].csf = imx_header.boot_data[0].csf.dst;	
+
+		tmp_to = ALIGN((tmp_to + CSF_DATA_SIZE), IMG_AUTO_ALIGN);
+		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
+	}
+
+	/* Open output file */
+	ofd = open (ofname, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, 0666);
+	if (ofd < 0) {
+		fprintf(stderr, "%s: Can't open: %s\n",
+                                ofname, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	/* Note:  ivt_offset + Image offset are not contained in the image */
+
+	/* Write image header */
+	if (write(ofd, &imx_header, sizeof(imx_header_v3_t)) != sizeof(imx_header_v3_t)) {
+		fprintf(stderr, "error writing image hdr\n");
+		exit(1);
+	}
+
+	/* Write SCFW after header */
+	copy_file(ofd, scfw_img, 0, imx_header.boot_data[0].img[0].src);
+
+	/* Write CM4 image after SCFW */
+	if(cm4_img) {
+		copy_file(ofd, cm4_img, 0, imx_header.boot_data[0].img[1].src);
+	}
+
+	/* Write AP image (if present) after CM4 */
+	if(ap_img && strncmp(ap_img, "null", 4)) {
+		copy_file(ofd, ap_img, 0, imx_header.boot_data[1].img[0].src);
+	}
+
+	/* Write scd after AP */
+	if(scd_img) {
+		copy_file(ofd, scd_img, 0, imx_header.boot_data[0].scd.src);
+	}
+
+	/* Write csf after scd, and pad to CSF_DATA_SIZE */
+	if(csf_img) {
+		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].csf.src);
+	}
+
+	/* Close output file */
+	close(ofd);
+
+	fprintf(stderr, "done.\n");
+
+	return 0;
 }
+
