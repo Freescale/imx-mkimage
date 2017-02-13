@@ -121,16 +121,29 @@ typedef struct {
 }  __attribute__((packed)) imx_header_v3_t; /*3072*/
 
 /* Command tags and parameters */
+#define HAB_DATA_WIDTH_BYTE 1 /* 8-bit value */
+#define HAB_DATA_WIDTH_HALF 2 /* 16-bit value */
+#define HAB_DATA_WIDTH_WORD 4 /* 32-bit value */
+#define HAB_CMD_WRT_DAT_MSK 1 /* mask/value flag */
+#define HAB_CMD_WRT_DAT_SET 2 /* set/clear flag */
+#define HAB_CMD_CHK_DAT_SET 2 /* set/clear flag */
+#define HAB_CMD_CHK_DAT_ANY 4 /* any/all flag */
+#define HAB_CMD_WRT_DAT_FLAGS_WIDTH   5 /* flags field width */
+#define HAB_CMD_WRT_DAT_FLAGS_SHIFT   3 /* flags field offset */
+#define HAB_CMD_WRT_DAT_BYTES_WIDTH   3 /* bytes field width */
+#define HAB_CMD_WRT_DAT_BYTES_SHIFT   0 /* bytes field offset */
+
 #define IVT_HEADER_TAG			0xD1
 #define IVT_VERSION			0x43
 #define DCD_HEADER_TAG			0xD2
 #define DCD_VERSION			0x43
 #define DCD_WRITE_DATA_COMMAND_TAG	0xCC
-#define DCD_WRITE_DATA_PARAM		0x4
-#define DCD_WRITE_CLR_BIT_PARAM		0xC
+#define DCD_WRITE_DATA_PARAM		(HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT) /* 0x4 */
+#define DCD_WRITE_CLR_BIT_PARAM		((HAB_CMD_WRT_DAT_MSK << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0xC */
+#define DCD_WRITE_SET_BIT_PARAM		((HAB_CMD_WRT_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x14 */
 #define DCD_CHECK_DATA_COMMAND_TAG	0xCF
-#define DCD_CHECK_BITS_SET_PARAM	0x14
-#define DCD_CHECK_BITS_CLR_PARAM	0x04
+#define DCD_CHECK_BITS_SET_PARAM	((HAB_CMD_CHK_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x14 */
+#define DCD_CHECK_BITS_CLR_PARAM	(HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT) /* 0x04 */
 
 #define IVT_OFFSET_NAND     (0x400)
 #define IVT_OFFSET_I2C      (0x400)
@@ -285,6 +298,7 @@ enum imximage_cmd {
 	CMD_BOOT_OFFSET,
 	CMD_WRITE_DATA,
 	CMD_WRITE_CLR_BIT,
+	CMD_WRITE_SET_BIT,
 	CMD_CHECK_BITS_SET,
 	CMD_CHECK_BITS_CLR,
 	CMD_CSF,
@@ -305,6 +319,7 @@ static table_entry_t imximage_cmds[] = {
 	{CMD_BOOT_OFFSET,       "BOOT_OFFSET",          "Boot offset",	  },
 	{CMD_WRITE_DATA,        "DATA",                 "Reg Write Data", },
 	{CMD_WRITE_CLR_BIT,     "CLR_BIT",              "Reg clear bit",  },
+	{CMD_WRITE_SET_BIT,     "SET_BIT",              "Reg set bit",  },
 	{CMD_CHECK_BITS_SET,    "CHECK_BITS_SET",   "Reg Check bits set", },
 	{CMD_CHECK_BITS_CLR,    "CHECK_BITS_CLR",   "Reg Check bits clr", },
 	{CMD_CSF,               "CSF",           "Command Sequence File", },
@@ -386,6 +401,7 @@ static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 		d2 = (struct dcd_v2_cmd *)(((char *)d) + len);
 
 	switch (cmd) {
+	/* Write value: *address = val_msk */
 	case CMD_WRITE_DATA:
 		if ((d->write_dcd_command.tag == DCD_WRITE_DATA_COMMAND_TAG) &&
 		    (d->write_dcd_command.param == DCD_WRITE_DATA_PARAM))
@@ -395,6 +411,7 @@ static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 		d->write_dcd_command.length = cpu_to_be16(4);
 		d->write_dcd_command.param = DCD_WRITE_DATA_PARAM;
 		break;
+	/* Clear bitmask: *address &= ~val_msk */
 	case CMD_WRITE_CLR_BIT:
 		if ((d->write_dcd_command.tag == DCD_WRITE_DATA_COMMAND_TAG) &&
 		    (d->write_dcd_command.param == DCD_WRITE_CLR_BIT_PARAM))
@@ -404,15 +421,27 @@ static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 		d->write_dcd_command.length = cpu_to_be16(4);
 		d->write_dcd_command.param = DCD_WRITE_CLR_BIT_PARAM;
 		break;
+	/* Set  bitmask: *address |= val_msk */
+	case CMD_WRITE_SET_BIT:
+		if ((d->write_dcd_command.tag == DCD_WRITE_DATA_COMMAND_TAG) &&
+		    (d->write_dcd_command.param == DCD_WRITE_SET_BIT_PARAM))
+			break;
+		d = d2;
+		d->write_dcd_command.tag = DCD_WRITE_DATA_COMMAND_TAG;
+		d->write_dcd_command.length = cpu_to_be16(4);
+		d->write_dcd_command.param = DCD_WRITE_SET_BIT_PARAM;
+		break;
 	/*
 	 * Check data command only supports one entry,
 	 */
+	/* All bits set: (*address & mask) == mask */
 	case CMD_CHECK_BITS_SET:
 		d = d2;
 		d->write_dcd_command.tag = DCD_CHECK_DATA_COMMAND_TAG;
 		d->write_dcd_command.length = cpu_to_be16(4);
 		d->write_dcd_command.param = DCD_CHECK_BITS_SET_PARAM;
 		break;
+	/* All bits clear: (*address & mask) == 0 */
 	case CMD_CHECK_BITS_CLR:
 		d = d2;
 		d->write_dcd_command.tag = DCD_CHECK_DATA_COMMAND_TAG;
@@ -493,6 +522,7 @@ static void parse_cfg_cmd(imx_header_v3_t *imxhdr, int32_t cmd, char *token,
 		break;
 	case CMD_WRITE_DATA:
 	case CMD_WRITE_CLR_BIT:
+	case CMD_WRITE_SET_BIT:
 	case CMD_CHECK_BITS_SET:
 	case CMD_CHECK_BITS_CLR:
 		value = get_cfg_value(token, name, lineno);
@@ -538,6 +568,7 @@ static void parse_cfg_fld(imx_header_v3_t *imxhdr, int32_t *cmd,
 		switch(*cmd) {
 		case CMD_WRITE_DATA:
 		case CMD_WRITE_CLR_BIT:
+		case CMD_WRITE_SET_BIT:
 		case CMD_CHECK_BITS_SET:
 		case CMD_CHECK_BITS_CLR:
 
