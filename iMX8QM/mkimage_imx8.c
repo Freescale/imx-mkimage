@@ -968,7 +968,8 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* Note:  ivt_offset + Image offset are not contained in the image */
+	/* Note: Image offset are not contained in the image */
+	lseek(ofd, ivt_offset, SEEK_SET);
 
 	/* Write image header */
 	if (write(ofd, &imx_header, sizeof(imx_header_v3_t)) != sizeof(imx_header_v3_t)) {
