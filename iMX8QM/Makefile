@@ -1,14 +1,18 @@
 MKIMG = mkimage_imx8
-DCD_CFG_SRC = imx8_dcd.cfg
-DCD_CFG = imx8_dcd.cfg.tmp
+DCD_CFG_SRC = imx8qm_dcd.cfg
+DCD_CFG = imx8qm_dcd.cfg.tmp
+
+DCD_CFG_50MHZ_SRC = imx8qm_dcd_50MHz.cfg
+DCD_CFG_50MHZ = imx8qm_dcd_50MHz.cfg.tmp
 
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
-$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
+$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC) $(DCD_CFG_50MHZ_SRC) 
 	@echo "Converting iMX8 DCD file" 
-	$(CC) -E -Wp,-MD,.imx8_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
+	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
+	$(CC) -E -Wp,-MD,.imx8qm_dcd_50MHz.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG_50MHZ) $(DCD_CFG_50MHZ_SRC)
 
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
