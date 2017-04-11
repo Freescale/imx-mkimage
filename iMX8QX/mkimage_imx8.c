@@ -45,7 +45,7 @@ typedef struct {
 	uint8_t param;
 } __attribute__((packed)) write_dcd_command_t;
 
-#define MAX_NUM_IMGS 4
+#define MAX_NUM_IMGS 6
 #define MAX_HW_CFG_SIZE_V2 359
 struct dcd_v2_cmd {
 	write_dcd_command_t write_dcd_command; /*4*/
@@ -62,14 +62,27 @@ typedef struct {
 	uint64_t dst;		/*8*/
 	uint64_t entry;		/*8*/
 	uint32_t size;		/*4*/
-	uint32_t flags;		/*4*/
-} __attribute__((packed)) boot_img_t;; /*32*/
+	uint32_t hab_flags;	/*4*/
+	uint32_t flags1;	/*4*/
+	uint32_t flags2;	/*4*/
+} __attribute__((packed)) boot_img_t;; /*40*/
 
 #define CORE_SC 	1
 #define CORE_CM4_0 	2
 #define CORE_CM4_1 	3
+#define CORE_CA35	4
 #define CORE_CA53 	4
 #define CORE_CA72 	5
+#define CORE_SECO	6
+
+#define IMG_TYPE_CSF     0x01   /* CSF image type */
+#define IMG_TYPE_SCD     0x02   /* SCD image type */
+#define IMG_TYPE_EXEC    0x03   /* Executable image type */
+#define IMG_TYPE_DATA    0x04   /* Data image type */
+
+#define IMG_TYPE_SHIFT   0
+#define IMG_TYPE_MASK    0x1f
+#define IMG_TYPE(x)      (((x) & IMG_TYPE_MASK) >> IMG_TYPE_SHIFT)
 
 #define BOOT_IMG_FLAGS_CORE_MASK	0xF
 #define BOOT_IMG_FLAGS_CPU_RID_MASK	0x3FF0
@@ -81,6 +94,7 @@ typedef struct {
 
 #define SC_R_A53_0	1
 #define SC_R_A72_0	6
+#define SC_R_A35_0	507
 #define SC_R_MU_0A	213
 #define SC_R_M4_0_PID0	278
 #define SC_R_M4_0_MU_1A	297
@@ -94,31 +108,26 @@ typedef struct {
 	uint32_t bd_size;	/*4*/
 	uint32_t bd_flags;	/*4*/
 	uint32_t reserved;	/*4*/
-	boot_img_t img[MAX_NUM_IMGS];	/*96*/
-	boot_img_t scd;                 /*32*/
-	boot_img_t csf;                 /*32*/
-	boot_img_t img_reserved;        /* Reserved for future, 32 */
-}  __attribute__((packed)) boot_data_v3_t;		/*128*/
+	boot_img_t img[MAX_NUM_IMGS];	/*240*/
+}  __attribute__((packed)) boot_data_v3_t;		/*256*/
 
 typedef struct {
 	ivt_header_t header;	/*4*/
-	uint32_t reserved1;	/*4*/
+	uint32_t ver;	/*4*/
 	uint64_t dcd_ptr;	/*8*/
 	uint64_t boot_data_ptr;	/*8*/
 	uint64_t self;		/*8*/
 	uint64_t csf;		/*8*/
-	uint64_t scd;		/*8*/
-	uint64_t reserved2;	/*8*/
-	uint64_t reserved3;	/*8*/
-}  __attribute__((packed)) flash_header_v3_t;		/*64*/
+	uint64_t next;		/*8*/
+}  __attribute__((packed)) flash_header_v3_t;		/*48*/
 
 #define MAX_NUM_OF_CONTAINER    2
 
 typedef struct {
-	flash_header_v3_t fhdr[MAX_NUM_OF_CONTAINER];	/*64*/
-	boot_data_v3_t boot_data[MAX_NUM_OF_CONTAINER]; /*128*/
+	flash_header_v3_t fhdr[MAX_NUM_OF_CONTAINER];	/*96*/
+	boot_data_v3_t boot_data[MAX_NUM_OF_CONTAINER]; /*512*/
 	dcd_v2_t dcd_table; /*2880*/
-}  __attribute__((packed)) imx_header_v3_t; /*3072*/
+}  __attribute__((packed)) imx_header_v3_t; /*3488*/
 
 /* Command tags and parameters */
 #define HAB_DATA_WIDTH_BYTE 1 /* 8-bit value */
@@ -133,8 +142,9 @@ typedef struct {
 #define HAB_CMD_WRT_DAT_BYTES_WIDTH   3 /* bytes field width */
 #define HAB_CMD_WRT_DAT_BYTES_SHIFT   0 /* bytes field offset */
 
-#define IVT_HEADER_TAG			0xD1
-#define IVT_VERSION			0x43
+#define IVT_HEADER_TAG			0xDE
+#define IVT_HEADER_VERSION			0x43
+#define IVT_VER					0x01
 #define DCD_HEADER_TAG			0xD2
 #define DCD_VERSION			0x43
 #define DCD_WRITE_DATA_COMMAND_TAG	0xCC
@@ -366,11 +376,11 @@ static void set_imx_hdr_v3(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 	flash_header_v3_t *fhdr_v3 = &imxhdr->fhdr[cont_id];
 
 	/* Set magic number */
-	fhdr_v3->header.tag = IVT_HEADER_TAG; /* 0xD1 */
+	fhdr_v3->header.tag = IVT_HEADER_TAG; /* 0xDE */
 	fhdr_v3->header.length = cpu_to_be16(sizeof(flash_header_v3_t));
-	fhdr_v3->header.version = IVT_VERSION; /* 0x40 */
+	fhdr_v3->header.version = IVT_HEADER_VERSION; /* 0x43 */
 
-	fhdr_v3->reserved1 = fhdr_v3->reserved2 = fhdr_v3->reserved3 = 0;
+	fhdr_v3->ver = IVT_VER; /* 0x01 */
 
 	fhdr_v3->self = hdr_base + flash_offset + cont_id * sizeof(flash_header_v3_t);
 	if (dcd_len > 0)
@@ -382,7 +392,11 @@ static void set_imx_hdr_v3(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 			+ offsetof(imx_header_v3_t, boot_data) + cont_id * sizeof(boot_data_v3_t);
 
 	fhdr_v3->csf = 0;
-	fhdr_v3->scd = 0;
+
+	if ((cont_id + 1) < MAX_NUM_OF_CONTAINER)
+		fhdr_v3->next = (uint64_t)&imxhdr->fhdr[cont_id + 1] - (uint64_t)imxhdr;
+	else
+		fhdr_v3->next = 0;
 }
 
 static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
@@ -650,7 +664,7 @@ static uint32_t parse_cfg_file(imx_header_v3_t *imxhdr, char *name)
 int main(int argc, char **argv)
 {
 	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1;
-	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0;
+	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id;
 	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL;
     uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
@@ -677,10 +691,10 @@ int main(int argc, char **argv)
 	//fprintf(stderr, "imx_header_v3_t size %lu boot_data_v3_t = %lu flash_header_v3_t = %lu\n",
 	//	sizeof(imx_header_v3_t), sizeof(boot_data_v3_t), sizeof(flash_header_v3_t));
 
-	fprintf(stderr, "Platform:\ti.MX8QM\n");
+	fprintf(stderr, "Platform:\ti.MX8QXP\n");
 
 	while(1)
-    	{
+	{
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
@@ -724,23 +738,31 @@ int main(int argc, char **argv)
 				fprintf(stderr, "AP:\t%s", optarg);
 				ap_img = optarg;
 				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
-					if(!strncmp(argv[optind++], "a53", 3))
+					if(!strncmp(argv[optind++], "a35", 3)) {
+						ap_core = CORE_CA35;
+						ap_rsrc = SC_R_A35_0;
+						fprintf(stderr, "\tcore: a35");
+					} else if (!strncmp(argv[optind++], "a53", 3)) {
 						ap_core = CORE_CA53;
-					else
+						ap_rsrc = SC_R_A53_0;
+						fprintf(stderr, "\tcore: a53");
+					} else {
 						ap_core = CORE_CA72;
+						ap_rsrc = SC_R_A72_0;
+						fprintf(stderr, "\tcore: a72");
+					}
 
 					ap_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
 
-					fprintf(stderr, "\tcore: %s",   (ap_core == CORE_CA53)? "a53":"a72");
 					fprintf(stderr, " addr: 0x%08x\n", ap_start_addr);
 				} else {
-					fprintf(stderr, "\n-ap option require THREE arguments: filename, a53/a72, start address in hex\n\n");
+					fprintf(stderr, "\n-ap option require THREE arguments: filename, a35/a53/a72, start address in hex\n\n");
 					exit(1);
 				}
 				break;
 			case 'f':
 				fprintf(stderr, "FLAG:\t%s\n", optarg);
-    			flags = (uint32_t) strtoll(optarg, NULL, 0);
+				flags = (uint32_t) strtoll(optarg, NULL, 0);
 				break;
 			case 'o':
 				fprintf(stderr, "Output:\t%s\n", optarg);
@@ -802,8 +824,9 @@ int main(int argc, char **argv)
 	imx_header.boot_data[0].img[0].dst = 0x30fe0000;
 	imx_header.boot_data[0].img[0].entry = 0x1ffe0000;
 	imx_header.boot_data[0].img[0].size = sbuf.st_size;
-	imx_header.boot_data[0].img[0].flags = 0;
-	imx_header.boot_data[0].img[0].flags = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
+	imx_header.boot_data[0].img[0].flags2 = 0;
+	imx_header.boot_data[0].img[0].hab_flags = IMG_TYPE_EXEC;
+	imx_header.boot_data[0].img[0].flags1 = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
 	imx_header.boot_data[0].num_images++;
 	imx_header.boot_data[0].bd_size = sizeof(boot_data_v3_t);
 	imx_header.boot_data[0].bd_flags = flags;
@@ -828,37 +851,42 @@ int main(int argc, char **argv)
 
 		//fprintf(stderr, "cm4 size = %d\n", (int)sbuf.st_size);
 
-		imx_header.boot_data[0].img[1].src = file_off;
-		imx_header.boot_data[0].img[1].dst = cm4_start_addr;
-		imx_header.boot_data[0].img[1].entry = 0x1FFE0000;
-		imx_header.boot_data[0].img[1].size = sbuf.st_size;
-		imx_header.boot_data[0].num_images++;	
+		cm4_img_id = imx_header.boot_data[0].num_images;
+		imx_header.boot_data[0].img[cm4_img_id].src = file_off;
+		imx_header.boot_data[0].img[cm4_img_id].dst = cm4_start_addr;
+		imx_header.boot_data[0].img[cm4_img_id].entry = cm4_start_addr; /* Change entry to system view for QXP */
+		imx_header.boot_data[0].img[cm4_img_id].size = sbuf.st_size;
+		imx_header.boot_data[0].num_images++;
 
 		if(cm4_core == 0) {
-			if(cm4_start_addr == 0x38fe0000) {
+			if(cm4_start_addr != 0x34fe0000) {
 				fprintf(stderr, "! Invalid CM4_0 start address\n");
 				exit(EXIT_FAILURE);
 			}
-			imx_header.boot_data[0].img[1].flags = (CORE_CM4_0 & BOOT_IMG_FLAGS_CORE_MASK);
-			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_0_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
-			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_0_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-			imx_header.boot_data[0].img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags2 = 0;
+			imx_header.boot_data[0].img[cm4_img_id].hab_flags = IMG_TYPE_EXEC;
+			imx_header.boot_data[0].img[cm4_img_id].flags1 = (CORE_CM4_0 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (SC_R_M4_0_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (SC_R_M4_0_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 		}
 		else {
-			if(cm4_start_addr == 0x34fe0000) {
+			if(cm4_start_addr != 0x38fe0000) {
 				fprintf(stderr, "! Invalid CM4_1 start address\n");
 				exit(EXIT_FAILURE);
 			}
-			imx_header.boot_data[0].img[1].flags = (CORE_CM4_1 & BOOT_IMG_FLAGS_CORE_MASK);
-			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_1_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
-			imx_header.boot_data[0].img[1].flags |= (SC_R_M4_1_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-			imx_header.boot_data[0].img[1].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags2 = 0;
+			imx_header.boot_data[0].img[cm4_img_id].hab_flags = IMG_TYPE_EXEC;
+			imx_header.boot_data[0].img[cm4_img_id].flags1 = (CORE_CM4_1 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (SC_R_M4_1_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (SC_R_M4_1_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+			imx_header.boot_data[0].img[cm4_img_id].flags1 |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 		}
 
 		file_off += ALIGN(sbuf.st_size, sector_size);
 	}
 
-	if((ap_core == CORE_CA72) || (ap_core == CORE_CA53))
+	if(ap_core == CORE_CA35 || ap_core == CORE_CA53 || ap_core == CORE_CA72)
 	{
 		//printf("Note: Ignoring CM4_0 and CA53 images\n");
 		//printf("Special case for DDR stress test tool\n");
@@ -867,7 +895,7 @@ int main(int argc, char **argv)
 			ap_fd = open(ap_img, O_RDONLY | O_BINARY);
 			if (ap_fd < 0) {
 				fprintf(stderr, "%s: Can't open: %s\n",
-                                	ap_img, strerror(errno));
+					ap_img, strerror(errno));
 				exit(EXIT_FAILURE);
 			}
 			if (fstat(ap_fd, &sbuf) < 0) {
@@ -881,7 +909,7 @@ int main(int argc, char **argv)
 			imx_header.boot_data[1].img[0].dst = ap_start_addr;
 			imx_header.boot_data[1].img[0].size = sbuf.st_size;
 			imx_header.boot_data[1].img[0].entry = ap_start_addr;
-			imx_header.boot_data[1].num_images++;	
+			imx_header.boot_data[1].num_images++;
 			imx_header.boot_data[1].bd_size = sizeof(boot_data_v3_t);
 			imx_header.boot_data[1].bd_flags = 0;
 			//fprintf(stderr, "ap img size = %d\n", (int)sbuf.st_size);
@@ -898,14 +926,12 @@ int main(int argc, char **argv)
 			imx_header.boot_data[1].bd_flags = 0;
 		}
 
-		imx_header.boot_data[1].img[0].flags = (ap_core & BOOT_IMG_FLAGS_CORE_MASK);
-		if (ap_core == CORE_CA53)
-			imx_header.boot_data[1].img[0].flags |= (SC_R_A53_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
-		else
-			imx_header.boot_data[1].img[0].flags |= (SC_R_A72_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
-
-		imx_header.boot_data[1].img[0].flags |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-		imx_header.boot_data[1].img[0].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+		imx_header.boot_data[1].img[0].flags2 = 0;
+		imx_header.boot_data[1].img[0].hab_flags = IMG_TYPE_EXEC;
+		imx_header.boot_data[1].img[0].flags1 = (ap_core & BOOT_IMG_FLAGS_CORE_MASK);
+		imx_header.boot_data[1].img[0].flags1 |= (ap_rsrc << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+		imx_header.boot_data[1].img[0].flags1 |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
+		imx_header.boot_data[1].img[0].flags1 |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 	}
 
 	if (scd_img) {
@@ -923,10 +949,14 @@ int main(int argc, char **argv)
 		}
 		close(scd_fd);
 
-		imx_header.boot_data[0].scd.src = file_off;
-		imx_header.boot_data[0].scd.dst = tmp_to;
-		imx_header.boot_data[0].scd.size = sbuf.st_size;
-		imx_header.fhdr[0].scd = imx_header.boot_data[0].scd.dst;	
+		scd_img_id = imx_header.boot_data[0].num_images;
+		imx_header.boot_data[0].img[scd_img_id].src = file_off;
+		imx_header.boot_data[0].img[scd_img_id].dst = tmp_to;
+		imx_header.boot_data[0].img[scd_img_id].size = sbuf.st_size;
+		imx_header.boot_data[0].img[scd_img_id].flags2 = 0;
+		imx_header.boot_data[0].img[scd_img_id].hab_flags = IMG_TYPE_SCD;
+		imx_header.boot_data[0].img[scd_img_id].flags1 = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
+		imx_header.boot_data[0].num_images++; /* scd img is count in num_images */
 
 		tmp_to = ALIGN((tmp_to + sbuf.st_size), IMG_AUTO_ALIGN);
 		file_off += ALIGN(sbuf.st_size, sector_size);
@@ -953,10 +983,15 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 
-		imx_header.boot_data[0].csf.src = file_off;
-		imx_header.boot_data[0].csf.dst = tmp_to;
-		imx_header.boot_data[0].csf.size = CSF_DATA_SIZE;
-		imx_header.fhdr[0].csf = imx_header.boot_data[0].csf.dst;	
+		csf_img_id = imx_header.boot_data[0].num_images;
+		imx_header.boot_data[0].img[csf_img_id].src = file_off;
+		imx_header.boot_data[0].img[csf_img_id].dst = tmp_to;
+		imx_header.boot_data[0].img[csf_img_id].size = CSF_DATA_SIZE;
+		imx_header.boot_data[0].img[csf_img_id].flags2 = 0;
+		imx_header.boot_data[0].img[csf_img_id].hab_flags = IMG_TYPE_CSF;
+		imx_header.boot_data[0].img[csf_img_id].flags1 = (CORE_SC & BOOT_IMG_FLAGS_CORE_MASK);
+		imx_header.boot_data[0].num_images++; /* csf img is count in num_images */
+		imx_header.fhdr[0].csf = imx_header.boot_data[0].img[csf_img_id].dst;
 
 		tmp_to = ALIGN((tmp_to + CSF_DATA_SIZE), IMG_AUTO_ALIGN);
 		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
@@ -994,12 +1029,12 @@ int main(int argc, char **argv)
 
 	/* Write scd after AP */
 	if(scd_img) {
-		copy_file(ofd, scd_img, 0, imx_header.boot_data[0].scd.src);
+		copy_file(ofd, scd_img, 0, imx_header.boot_data[0].img[scd_img_id].src);
 	}
 
 	/* Write csf after scd, and pad to CSF_DATA_SIZE */
 	if(csf_img) {
-		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].csf.src);
+		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].img[csf_img_id].src);
 	}
 
 	/* Close output file */
