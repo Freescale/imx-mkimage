@@ -162,7 +162,7 @@ typedef struct {
 #define IVT_OFFSET_SATA		(0x400)
 
 #define CSF_DATA_SIZE       (0x4000)
-#define INITIAL_LOAD_ADDR_SCU_ROM 0x3100e000
+#define INITIAL_LOAD_ADDR_SCU_ROM 0x2000e000
 #define INITIAL_LOAD_ADDR_AP_ROM 0x00110000
 #define IMG_AUTO_ALIGN 0x10
 
@@ -821,7 +821,7 @@ int main(int argc, char **argv)
 	fprintf(stderr, "scfw size = %ld\n", sbuf.st_size);
 
 	imx_header.boot_data[0].img[0].src = file_off;
-	imx_header.boot_data[0].img[0].dst = 0x30fe0000;
+	imx_header.boot_data[0].img[0].dst = 0x1ffe0000;
 	imx_header.boot_data[0].img[0].entry = 0x1ffe0000;
 	imx_header.boot_data[0].img[0].size = sbuf.st_size;
 	imx_header.boot_data[0].img[0].flags2 = 0;
