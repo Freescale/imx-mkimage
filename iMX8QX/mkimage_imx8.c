@@ -94,7 +94,7 @@ typedef struct {
 
 #define SC_R_A53_0	1
 #define SC_R_A72_0	6
-#define SC_R_A35_0	507
+#define SC_R_A35_0	508
 #define SC_R_MU_0A	213
 #define SC_R_M4_0_PID0	278
 #define SC_R_M4_0_MU_1A	297
