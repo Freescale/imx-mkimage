@@ -21,11 +21,17 @@ $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC) $(DCD_CFG_50MHZ_SRC)
 clean:
 	@rm -f $(MKIMG) $(DCD_CFG) .imx8_dcd.cfg.cfgtmp.d
 
+flash_scfw: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
+	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
+
+flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -out flash.bin
+
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
+	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
 
 flash_ca72: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a72 0x80000000 -out flash.bin
+	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a72 0x80000000 -out flash.bin
 
 flash_cm4_0: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -out flash.bin
