@@ -971,8 +971,6 @@ int main(int argc, char **argv)
 	}
 
 	/* Note: Image offset are not contained in the image */
-	lseek(ofd, ivt_offset, SEEK_SET);
-
 	/* Write image header */
 	if (write(ofd, &imx_header, sizeof(imx_header_v3_t)) != sizeof(imx_header_v3_t)) {
 		fprintf(stderr, "error writing image hdr\n");
@@ -980,32 +978,33 @@ int main(int argc, char **argv)
 	}
 
 	/* Write SCFW after header */
-	copy_file(ofd, scfw_img, 0, imx_header.boot_data[0].img[0].src);
+	copy_file(ofd, scfw_img, 0, imx_header.boot_data[0].img[0].src - ivt_offset);
 
 	/* Write CM4 image after SCFW */
 	if(cm4_img) {
-		copy_file(ofd, cm4_img, 0, imx_header.boot_data[0].img[1].src);
+		copy_file(ofd, cm4_img, 0, imx_header.boot_data[0].img[1].src - ivt_offset);
 	}
 
 	/* Write AP image (if present) after CM4 */
 	if(ap_img && strncmp(ap_img, "null", 4)) {
-		copy_file(ofd, ap_img, 0, imx_header.boot_data[1].img[0].src);
+		copy_file(ofd, ap_img, 0, imx_header.boot_data[1].img[0].src - ivt_offset);
 	}
 
 	/* Write scd after AP */
 	if(scd_img) {
-		copy_file(ofd, scd_img, 0, imx_header.boot_data[0].scd.src);
+		copy_file(ofd, scd_img, 0, imx_header.boot_data[0].scd.src - ivt_offset);
 	}
 
 	/* Write csf after scd, and pad to CSF_DATA_SIZE */
 	if(csf_img) {
-		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].csf.src);
+		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].csf.src - ivt_offset);
 	}
 
 	/* Close output file */
 	close(ofd);
 
 	fprintf(stderr, "done.\n");
+	fprintf(stderr, "Note: Please copy image to offset: IVT_OFFSET + IMAGE_OFFSET\n");
 
 	return 0;
 }
