@@ -30,6 +30,9 @@ flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
 
+flash_flexspi: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
+	./mkimage_imx8 -dev flexspi -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
+
 flash_ca72: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a72 0x80000000 -out flash.bin
 
