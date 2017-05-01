@@ -20,6 +20,9 @@ clean:
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
 
+flash_flexspi: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
+	./mkimage_imx8 -dev flexspi -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
+
 flash_cm4_0: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -out flash.bin
 

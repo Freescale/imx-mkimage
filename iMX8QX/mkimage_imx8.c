@@ -666,7 +666,7 @@ int main(int argc, char **argv)
 	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1;
 	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id;
 	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL;
-    uint32_t flags = 0;
+	uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
 	uint32_t ivt_offset = IVT_OFFSET_SD;
 	uint32_t sector_size = 0x200;
@@ -683,6 +683,7 @@ int main(int argc, char **argv)
 		{"flags", required_argument, NULL, 'f'},
 		{"scd", required_argument, NULL, 'x'},
 		{"csf", required_argument, NULL, 'c'},
+		{"dev", required_argument, NULL, 'e'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -775,6 +776,17 @@ int main(int argc, char **argv)
 			case 'c':
 				fprintf(stderr, "CSF:\t%s\n", optarg);
 				csf_img = optarg;
+				break;
+			case 'e':
+				fprintf(stderr, "BOOT DEVICE:\t%s\n", optarg);
+				if (!strcmp(optarg, "flexspi")) {
+					ivt_offset = IVT_OFFSET_FLEXSPI;
+				} else if (!strcmp(optarg, "sd")) {
+					ivt_offset = IVT_OFFSET_SD;
+				} else {
+					fprintf(stderr, "\n-dev option, Valiad boot device are sd or flexspi\n\n");
+					exit(1);
+				}
 				break;
 			case ':':
 				fprintf(stderr, "option %c missing arguments\n", optopt);
