@@ -154,6 +154,7 @@ typedef struct {
 #define CSF_DATA_SIZE       (0x4000)
 #define INITIAL_LOAD_ADDR_SCU_ROM 0x3100e000
 #define INITIAL_LOAD_ADDR_AP_ROM 0x00110000
+#define INITIAL_LOAD_ADDR_FLEXSPI 0x08000000
 #define IMG_AUTO_ALIGN 0x10
 
 #define ALIGN(x,a)		__ALIGN_MASK((x),(__typeof__(x))(a)-1)
@@ -805,8 +806,13 @@ int main(int argc, char **argv)
 	        fprintf(stderr, "dcd len = %d\n", dcd_len);
 	}
 
-	set_imx_hdr_v3(&imx_header, dcd_len, ivt_offset, INITIAL_LOAD_ADDR_SCU_ROM, 0);
-	set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_AP_ROM, 1);
+	if (ivt_offset == IVT_OFFSET_FLEXSPI) {
+		set_imx_hdr_v3(&imx_header, dcd_len, ivt_offset, INITIAL_LOAD_ADDR_FLEXSPI, 0);
+		set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_FLEXSPI, 1);
+	} else {
+		set_imx_hdr_v3(&imx_header, dcd_len, ivt_offset, INITIAL_LOAD_ADDR_SCU_ROM, 0);
+		set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_AP_ROM, 1);
+	}
 
 	fprintf(stderr, "scfw size = %ld\n", sbuf.st_size);
 
