@@ -140,10 +140,12 @@ typedef struct {
 #define DCD_WRITE_DATA_COMMAND_TAG	0xCC
 #define DCD_WRITE_DATA_PARAM		(HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT) /* 0x4 */
 #define DCD_WRITE_CLR_BIT_PARAM		((HAB_CMD_WRT_DAT_MSK << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0xC */
-#define DCD_WRITE_SET_BIT_PARAM		((HAB_CMD_WRT_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x14 */
+#define DCD_WRITE_SET_BIT_PARAM		((HAB_CMD_WRT_DAT_MSK << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_CMD_WRT_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x1C */
 #define DCD_CHECK_DATA_COMMAND_TAG	0xCF
-#define DCD_CHECK_BITS_SET_PARAM	((HAB_CMD_CHK_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x14 */
 #define DCD_CHECK_BITS_CLR_PARAM	(HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT) /* 0x04 */
+#define DCD_CHECK_BITS_SET_PARAM	((HAB_CMD_CHK_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x14 */
+#define DCD_CHECK_ANY_BIT_CLR_PARAM	((HAB_CMD_CHK_DAT_ANY << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x24 */
+#define DCD_CHECK_ANY_BIT_SET_PARAM	((HAB_CMD_CHK_DAT_ANY << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_CMD_CHK_DAT_SET << HAB_CMD_WRT_DAT_FLAGS_SHIFT) | (HAB_DATA_WIDTH_WORD << HAB_CMD_WRT_DAT_BYTES_SHIFT)) /* 0x34 */
 
 #define IVT_OFFSET_NAND     (0x400)
 #define IVT_OFFSET_I2C      (0x400)
@@ -302,6 +304,8 @@ enum imximage_cmd {
 	CMD_WRITE_SET_BIT,
 	CMD_CHECK_BITS_SET,
 	CMD_CHECK_BITS_CLR,
+	CMD_CHECK_ANY_BIT_SET,
+	CMD_CHECK_ANY_BIT_CLR,
 	CMD_CSF,
 	CMD_PLUGIN,
 };
@@ -321,8 +325,10 @@ static table_entry_t imximage_cmds[] = {
 	{CMD_WRITE_DATA,        "DATA",                 "Reg Write Data", },
 	{CMD_WRITE_CLR_BIT,     "CLR_BIT",              "Reg clear bit",  },
 	{CMD_WRITE_SET_BIT,     "SET_BIT",              "Reg set bit",  },
-	{CMD_CHECK_BITS_SET,    "CHECK_BITS_SET",   "Reg Check bits set", },
-	{CMD_CHECK_BITS_CLR,    "CHECK_BITS_CLR",   "Reg Check bits clr", },
+	{CMD_CHECK_BITS_SET,    "CHECK_BITS_SET",   "Reg Check all bits set", },
+	{CMD_CHECK_BITS_CLR,    "CHECK_BITS_CLR",   "Reg Check all bits clr", },
+	{CMD_CHECK_ANY_BIT_SET, "CHECK_ANY_BIT_SET",   "Reg Check any bit set", },
+	{CMD_CHECK_ANY_BIT_CLR, "CHECK_ANY_BIT_CLR",   "Reg Check any bit clr", },
 	{CMD_CSF,               "CSF",           "Command Sequence File", },
 	{CMD_IMAGE_VERSION,     "IMAGE_VERSION",        "image version",  },
 	{-1,                    "",                     "",	          },
@@ -449,6 +455,20 @@ static void set_dcd_param_v2(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 		d->write_dcd_command.length = cpu_to_be16(4);
 		d->write_dcd_command.param = DCD_CHECK_BITS_CLR_PARAM;
 		break;
+	/* Any bit clear: (*address & mask) != mask */
+	case CMD_CHECK_ANY_BIT_CLR:
+		d = d2;
+		d->write_dcd_command.tag = DCD_CHECK_DATA_COMMAND_TAG;
+		d->write_dcd_command.length = cpu_to_be16(4);
+		d->write_dcd_command.param = DCD_CHECK_ANY_BIT_CLR_PARAM;
+		break;
+	/* Any bit set: (*address & mask) != 0 */
+	case CMD_CHECK_ANY_BIT_SET:
+		d = d2;
+		d->write_dcd_command.tag = DCD_CHECK_DATA_COMMAND_TAG;
+		d->write_dcd_command.length = cpu_to_be16(4);
+		d->write_dcd_command.param = DCD_CHECK_ANY_BIT_SET_PARAM;
+		break;
 	default:
 		break;
 	}
@@ -526,6 +546,8 @@ static void parse_cfg_cmd(imx_header_v3_t *imxhdr, int32_t cmd, char *token,
 	case CMD_WRITE_SET_BIT:
 	case CMD_CHECK_BITS_SET:
 	case CMD_CHECK_BITS_CLR:
+	case CMD_CHECK_ANY_BIT_SET:
+	case CMD_CHECK_ANY_BIT_CLR:
 		value = get_cfg_value(token, name, lineno);
 		set_dcd_param_v2(imxhdr, dcd_len, cmd);
 		set_dcd_val_v2(imxhdr, name, lineno, fld, value, dcd_len);
@@ -572,7 +594,8 @@ static void parse_cfg_fld(imx_header_v3_t *imxhdr, int32_t *cmd,
 		case CMD_WRITE_SET_BIT:
 		case CMD_CHECK_BITS_SET:
 		case CMD_CHECK_BITS_CLR:
-
+		case CMD_CHECK_ANY_BIT_SET:
+		case CMD_CHECK_ANY_BIT_CLR:
 			value = get_cfg_value(token, name, lineno);
 			set_dcd_param_v2(imxhdr, *dcd_len, *cmd);
 			set_dcd_val_v2(imxhdr, name, lineno, fld, value,

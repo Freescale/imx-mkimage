@@ -1,18 +1,17 @@
 MKIMG = mkimage_imx8
-DCD_CFG_SRC = imx8qm_dcd.cfg
-DCD_CFG = imx8qm_dcd.cfg.tmp
+DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
+#DCD_CFG_SRC = imx8qm_dcd_1.2GHz.cfg
+#DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
 
-DCD_CFG_50MHZ_SRC = imx8qm_dcd_50MHz.cfg
-DCD_CFG_50MHZ = imx8qm_dcd_50MHz.cfg.tmp
+DCD_CFG = imx8qm_dcd.cfg.tmp
 
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
-$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC) $(DCD_CFG_50MHZ_SRC) 
+$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file" 
 	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
-	$(CC) -E -Wp,-MD,.imx8qm_dcd_50MHz.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG_50MHZ) $(DCD_CFG_50MHZ_SRC)
 
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
@@ -25,7 +24,7 @@ flash_scfw: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
 
 flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -out flash.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
 
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a53 0x80000000 -out flash.bin
