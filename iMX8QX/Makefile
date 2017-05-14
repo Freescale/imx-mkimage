@@ -6,11 +6,10 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
-$(DCD_CFG): $(DCD_CFG_SRC)
+$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
-$(MKIMG): mkimage_imx8.c
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
 
