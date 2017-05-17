@@ -21,10 +21,10 @@ flash_scfw: $(MKIMG) scfw_tcm.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
 
 flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -out flash.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
 
 flash: $(MKIMG) scfw_tcm.bin u-boot.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
 
 flash_flexspi: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -dev flexspi -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
