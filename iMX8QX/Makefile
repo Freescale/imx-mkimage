@@ -24,7 +24,7 @@ flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
 
 flash: $(MKIMG) scfw_tcm.bin u-boot.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
+	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
 
 flash_flexspi: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot.bin
 	./mkimage_imx8 -dev flexspi -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot.bin a35 0x80000000 -out flash.bin
@@ -37,4 +37,3 @@ flash_all: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin u-boot.bin scd.bin csf.
 
 flash_ca35_ddrstress: $(MKIMG) scfw_tcm.bin mx8qxp_ddr_stress_test.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qxp_ddr_stress_test.bin a35 0x00112000 -out flash.bin	
-	
