@@ -34,3 +34,7 @@ flash_cm4_0: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
 
 flash_all: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin u-boot.bin scd.bin csf.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -ap u-boot.bin a35 0x80000000 -scd scd.bin -csf csf.bin -out flash.bin
+
+flash_ca35_ddrstress: $(MKIMG) scfw_tcm.bin mx8qxp_ddr_stress_test.bin
+	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qxp_ddr_stress_test.bin a35 0x00112000 -out flash.bin	
+	
