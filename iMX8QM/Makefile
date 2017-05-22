@@ -49,3 +49,10 @@ flash_ca72_ddrstress: $(MKIMG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
 
 flash_ca53_ddrstress: $(MKIMG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
+
+flash_ca72_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a72 0x00112000 -out flash.bin
+
+flash_ca53_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
+
