@@ -16,6 +16,7 @@ $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
 
+u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
 	@dd if=u-boot.bin of=u-boot-atf.bin bs=1K seek=128
 
