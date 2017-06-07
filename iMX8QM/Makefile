@@ -27,7 +27,7 @@ clean:
 flash_scfw: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
 
-flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
+flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
 
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
