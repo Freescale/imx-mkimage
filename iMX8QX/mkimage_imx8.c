@@ -687,9 +687,9 @@ static uint32_t parse_cfg_file(imx_header_v3_t *imxhdr, char *name)
 
 int main(int argc, char **argv)
 {
-	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1;
-	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id;
-	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL;
+	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1, csf_ap_fd = -1;
+	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id, csf_ap_img_id = 0;
+	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL, *csf_ap_img = NULL;
 	uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
 	uint32_t ivt_offset = IVT_OFFSET_SD;
@@ -708,6 +708,7 @@ int main(int argc, char **argv)
 		{"scd", required_argument, NULL, 'x'},
 		{"csf", required_argument, NULL, 'c'},
 		{"dev", required_argument, NULL, 'e'},
+		{"csf_ap", required_argument, NULL, 'p'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -800,6 +801,10 @@ int main(int argc, char **argv)
 			case 'c':
 				fprintf(stderr, "CSF:\t%s\n", optarg);
 				csf_img = optarg;
+				break;
+			case 'p':
+				fprintf(stderr, "CSF_AP:\t%s\n", optarg);
+				csf_ap_img = optarg;
 				break;
 			case 'e':
 				fprintf(stderr, "BOOT DEVICE:\t%s\n", optarg);
@@ -1038,6 +1043,41 @@ int main(int argc, char **argv)
 		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
 	}
 
+	if (csf_ap_img) {
+		csf_ap_fd = open(csf_ap_img, O_RDONLY | O_BINARY);
+		if (csf_ap_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                csf_ap_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(csf_ap_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				csf_ap_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(csf_ap_fd);
+
+		if (sbuf.st_size > CSF_DATA_SIZE) {
+			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+				csf_ap_img, sbuf.st_size, CSF_DATA_SIZE);
+			exit(EXIT_FAILURE);
+		}
+
+		csf_ap_img_id = imx_header.boot_data[1].num_images;
+		imx_header.boot_data[1].img[csf_ap_img_id].src = file_off;
+		imx_header.boot_data[1].img[csf_ap_img_id].dst = tmp_to;
+		imx_header.boot_data[1].img[csf_ap_img_id].size = CSF_DATA_SIZE;
+		imx_header.boot_data[1].img[csf_ap_img_id].flags2 = 0;
+		imx_header.boot_data[1].img[csf_ap_img_id].hab_flags = IMG_TYPE_CSF;
+		imx_header.boot_data[1].img[csf_ap_img_id].flags1 = (ap_core & BOOT_IMG_FLAGS_CORE_MASK);
+		imx_header.boot_data[1].num_images++; /* csf img is count in num_images */
+		imx_header.fhdr[1].csf = imx_header.boot_data[1].img[csf_ap_img_id].dst;
+
+		tmp_to = ALIGN((tmp_to + CSF_DATA_SIZE), IMG_AUTO_ALIGN);
+		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
+	}
+
 	/* Open output file */
 	ofd = open (ofname, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, 0666);
 	if (ofd < 0) {
@@ -1074,6 +1114,11 @@ int main(int argc, char **argv)
 	/* Write csf after scd, and pad to CSF_DATA_SIZE */
 	if(csf_img) {
 		copy_file(ofd, csf_img, CSF_DATA_SIZE, imx_header.boot_data[0].img[csf_img_id].src - ivt_offset);
+	}
+
+	/* Write csf_ap after csf, and pad to CSF_DATA_SIZE */
+	if(csf_ap_img) {
+		copy_file(ofd, csf_ap_img, CSF_DATA_SIZE, imx_header.boot_data[1].img[csf_ap_img_id].src - ivt_offset);
 	}
 
 	/* Close output file */
