@@ -27,6 +27,7 @@ clean:
 
 flash_scfw: $(MKIMG) scfw_tcm.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
+	@echo "Example: dd if=flash.bin of=[SD device] bs=1k seek=33" 
 
 flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
