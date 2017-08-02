@@ -6,6 +6,10 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
+N ?= latest
+SERVER=http://yb2.am.freescale.net
+DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
+
 $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
@@ -17,7 +21,7 @@ u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
 	@dd if=u-boot.bin of=u-boot-atf.bin bs=1K seek=128
 
-.PHONY: clean
+.PHONY: clean nightly
 clean:
 	@rm -f $(MKIMG) $(DCD_CFG) .imx8qx_dcd.cfg.cfgtmp.d
 
@@ -41,3 +45,13 @@ flash_all: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin u-boot-atf.bin scd.bin 
 
 flash_ca35_ddrstress: $(MKIMG) scfw_tcm.bin mx8qxp_ddr_stress_test.bin
 	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qxp_ddr_stress_test.bin a35 0x00112000 -out flash.bin	
+
+nightly :
+	@rm -rf boot
+	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
+	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qxp.bin -O bl31.bin
+	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
+	@wget -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
+	@wget -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
+	@mv -f Image boot
+	@rename "Image-" "" boot/*.dtb
