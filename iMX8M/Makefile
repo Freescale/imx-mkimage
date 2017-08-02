@@ -34,11 +34,11 @@ u-boot-atf-tee.bin: u-boot.bin bl31.bin tee.bin
 clean:
 	@rm -f $(MKIMG) $(DCD_CFG) .imx8mq_dcd.cfg.cfgtmp.d u-boot-atf.bin u-boot-atf-tee.bin u-boot-spl-ddr.bin $(OUTIMG)
 
-flash_hdmi_spl_uboot: $(MKIMG) hdmi.bin u-boot-spl-ddr.bin u-boot-atf.bin csf_hdmi.bin
-	./mkimage_imx8 -hdmi hdmi.bin -loader u-boot-spl-ddr.bin 0x7E1000 -csf_hdmi csf_hdmi.bin -second_loader u-boot-atf.bin 0x40001000 0x60000 -out $(OUTIMG)
+flash_hdmi_spl_uboot: $(MKIMG) hdmi_imx8m.bin u-boot-spl-ddr.bin u-boot-atf.bin
+	./mkimage_imx8 -hdmi hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf.bin 0x40001000 0x60000 -out $(OUTIMG)
 
-flash_hdmi_spl_uboot_tee: $(MKIMG) hdmi.bin u-boot-spl-ddr.bin u-boot-atf-tee.bin csf_hdmi.bin
-	./mkimage_imx8 -hdmi hdmi.bin -loader u-boot-spl-ddr.bin 0x7E1000 -csf_hdmi csf_hdmi.bin -second_loader u-boot-atf-tee.bin 0x40001000 0x60000 -out $(OUTIMG)
+flash_hdmi_spl_uboot_tee: $(MKIMG) hdmi_imx8m.bin u-boot-spl-ddr.bin u-boot-atf-tee.bin
+	./mkimage_imx8 -hdmi hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40001000 0x60000 -out $(OUTIMG)
 
 flash_spl_uboot: $(MKIMG) u-boot-spl-ddr.bin u-boot-atf.bin
 	./mkimage_imx8 -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf.bin 0x40001000 0x60000 -out $(OUTIMG)
