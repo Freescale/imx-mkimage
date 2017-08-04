@@ -673,15 +673,17 @@ static uint32_t parse_cfg_file(imx_header_v3_t *imxhdr, char *name)
 
 int main(int argc, char **argv)
 {
-	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1, csf_ap_fd = -1;
-	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0;
-	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL, *csf_ap_img = NULL;
+	int c, file_off, scfw_fd = -1, cm4_fd = -1, aprom_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1, csf_ap_fd = -1;
+	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, aprom_start_addr = 0, aprom_core = 0;
+	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL, *csf_ap_img = NULL, *aprom_img = NULL;
 	uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
 	uint32_t ivt_offset = IVT_OFFSET_SD;
 	uint32_t sector_size = 0x200;
 	struct stat sbuf;
-	uint64_t tmp_to;
+	uint64_t tmp_to, ap_tmp_to = 0;
+
+	int aprom_img_id;
 
 	static struct option long_options[] =
 	{
@@ -695,6 +697,7 @@ int main(int argc, char **argv)
 		{"csf", required_argument, NULL, 'c'},
 		{"dev", required_argument, NULL, 'e'},
 		{"csf_ap", required_argument, NULL, 'p'},
+		{"aprom", required_argument, NULL, 'r'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -795,6 +798,24 @@ int main(int argc, char **argv)
 					exit(1);
 				}
 				break;
+			case 'r':
+				fprintf(stderr, "APROM:\t%s", optarg);
+				aprom_img = optarg;
+				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
+					if(!strncmp(argv[optind++], "a53", 3))
+						aprom_core = CORE_CA53;
+					else
+						aprom_core = CORE_CA72;
+
+					aprom_start_addr = (uint32_t) strtoll(argv[optind++], NULL, 0);
+
+					fprintf(stderr, "\tcore: %s",   (aprom_core == CORE_CA53)? "a53":"a72");
+					fprintf(stderr, " addr: 0x%08x\n", aprom_start_addr);
+				} else {
+					fprintf(stderr, "\n-aprom option require THREE arguments: filename, a53/a72, start address in hex\n\n");
+					exit(1);
+				}
+				break;
 			case ':':
 				fprintf(stderr, "option %c missing arguments\n", optopt);
 				break;
@@ -812,6 +833,12 @@ int main(int argc, char **argv)
 	if((scfw_img == NULL) || (ofname == NULL))
 	{
 		fprintf(stderr, "mandatory args scfw and output file name missing! abort\n");
+		exit(1);
+	}
+
+	if((ap_img == NULL) && (csf_ap_img != NULL))
+	{
+		fprintf(stderr, "Must specify the AP image when using CSF image for AP\n");
 		exit(1);
 	}
 
@@ -902,6 +929,45 @@ int main(int argc, char **argv)
 		}
 
 		file_off += ALIGN(sbuf.st_size, sector_size);
+
+		aprom_img_id = 2;
+	} else {
+		aprom_img_id = 1;
+	}
+
+	if (aprom_img) {
+		aprom_fd = open(aprom_img, O_RDONLY | O_BINARY);
+		if (aprom_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                aprom_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(aprom_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				aprom_img, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(aprom_fd);
+
+		imx_header.boot_data[0].img[aprom_img_id].src = file_off;
+		imx_header.boot_data[0].img[aprom_img_id].dst = aprom_start_addr;
+		imx_header.boot_data[0].img[aprom_img_id].entry = aprom_start_addr;
+		imx_header.boot_data[0].img[aprom_img_id].size = sbuf.st_size;
+		imx_header.boot_data[0].num_images++;
+
+		if(aprom_core == CORE_CA53) {
+			imx_header.boot_data[0].img[aprom_img_id].flags = (CORE_CA53 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[aprom_img_id].flags |= (SC_R_A53_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+		}
+		else {
+			imx_header.boot_data[0].img[aprom_img_id].flags = (CORE_CA72 & BOOT_IMG_FLAGS_CORE_MASK);
+			imx_header.boot_data[0].img[aprom_img_id].flags |= (SC_R_A72_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
+		}
+
+		imx_header.boot_data[0].img[aprom_img_id].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+
+		file_off += ALIGN(sbuf.st_size, sector_size);
 	}
 
 	if((ap_core == CORE_CA72) || (ap_core == CORE_CA53))
@@ -930,9 +996,13 @@ int main(int argc, char **argv)
 			imx_header.boot_data[1].num_images++;
 			imx_header.boot_data[1].bd_size = sizeof(boot_data_v3_t);
 			imx_header.boot_data[1].bd_flags = 0;
-			//fprintf(stderr, "ap img size = %d\n", (int)sbuf.st_size);
+
+			fprintf(stderr, "ap img off = 0x%lx\n", imx_header.boot_data[1].img[0].src);
+			fprintf(stderr, "ap img dst = 0x%lx\n", imx_header.boot_data[1].img[0].dst);
+			fprintf(stderr, "ap img size = 0x%x\n", imx_header.boot_data[1].img[0].size);
 
 			file_off += ALIGN(sbuf.st_size, sector_size);
+			ap_tmp_to = ALIGN((imx_header.boot_data[1].img[0].dst + sbuf.st_size), IMG_AUTO_ALIGN);
 		}
 		else {
 			imx_header.boot_data[1].img[0].src = 0;
@@ -1030,11 +1100,13 @@ int main(int argc, char **argv)
 		}
 
 		imx_header.boot_data[1].csf.src = file_off;
-		imx_header.boot_data[1].csf.dst = tmp_to;
+		imx_header.boot_data[1].csf.dst = ap_tmp_to;
 		imx_header.boot_data[1].csf.size = CSF_DATA_SIZE;
 		imx_header.fhdr[1].csf = imx_header.boot_data[1].csf.dst;
 
-		tmp_to = ALIGN((tmp_to + CSF_DATA_SIZE), IMG_AUTO_ALIGN);
+		fprintf(stderr, "ap csf off = 0x%lx\n", imx_header.boot_data[1].csf.src);
+		fprintf(stderr, "ap csf dst = 0x%lx\n", imx_header.boot_data[1].csf.dst);
+
 		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
 	}
 
@@ -1060,6 +1132,10 @@ int main(int argc, char **argv)
 	if(cm4_img) {
 		copy_file(ofd, cm4_img, 0, imx_header.boot_data[0].img[1].src - ivt_offset);
 	}
+
+	if (aprom_img) {
+		copy_file(ofd, aprom_img, 0, imx_header.boot_data[0].img[aprom_img_id].src - ivt_offset);
+    }
 
 	/* Write AP image (if present) after CM4 */
 	if(ap_img && strncmp(ap_img, "null", 4)) {

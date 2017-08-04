@@ -9,13 +9,15 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
+DDR_TRAIN ?= 0
+
 N ?= latest
 SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
 
 $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file" 
-	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
+	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
@@ -64,6 +66,12 @@ flash_ca72_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test
 
 flash_ca53_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
 	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
+
+flash_aprom_ddr_dcd: $(MKIMG) $(DCD_CFG)
+	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -aprom aprom_ddr.bin a53 0x80000000 -ap u-boot-atf.bin a53 0x90000000 -csf_ap csf_ap.bin -out flash.bin
+
+flash_aprom_ddr:
+	${MAKE} DDR_TRAIN=1 flash_aprom_ddr_dcd
 
 nightly :
 	@rm -rf boot
