@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <inttypes.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -401,7 +402,7 @@ static void set_imx_hdr_v3(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 	fhdr_v3->csf = 0;
 
 	if ((cont_id + 1) < MAX_NUM_OF_CONTAINER)
-		fhdr_v3->next = (uint64_t)&imxhdr->fhdr[cont_id + 1] - (uint64_t)imxhdr;
+		fhdr_v3->next = (uintptr_t)&imxhdr->fhdr[cont_id + 1] - (uintptr_t)imxhdr;
 	else
 		fhdr_v3->next = 0;
 }
@@ -688,7 +689,7 @@ static uint32_t parse_cfg_file(imx_header_v3_t *imxhdr, char *name)
 int main(int argc, char **argv)
 {
 	int c, file_off, scfw_fd = -1, cm4_fd = -1, ap_fd = -1, scd_fd = -1, csf_fd = -1, ofd = -1, csf_ap_fd = -1;
-	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id, csf_ap_img_id = 0;
+	unsigned int dcd_len = 0, cm4_core = 0, cm4_start_addr = 0, ap_start_addr = 0, ap_core = 0, ap_rsrc = 0, cm4_img_id = 0, csf_img_id = 0, scd_img_id = 0, csf_ap_img_id = 0;
 	char *ofname = NULL, *scfw_img = NULL, *dcd_img = NULL, *cm4_img = NULL, *ap_img = NULL, *scd_img = NULL, *csf_img = NULL, *csf_ap_img = NULL;
 	uint32_t flags = 0;
 	static imx_header_v3_t imx_header;
@@ -864,7 +865,7 @@ int main(int argc, char **argv)
 		set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_AP_ROM, 1);
 	}
 
-	fprintf(stderr, "scfw size = %ld\n", sbuf.st_size);
+	fprintf(stderr, "scfw size = %" PRIu64 "\n", sbuf.st_size);
 
 	imx_header.boot_data[0].img[0].src = file_off;
 	imx_header.boot_data[0].img[0].dst = 0x1ffe0000;
@@ -1024,7 +1025,7 @@ int main(int argc, char **argv)
 		close(csf_fd);
 
 		if (sbuf.st_size > CSF_DATA_SIZE) {
-			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+			fprintf(stderr, "%s: file size %" PRIu64 " is larger than CSF_DATA_SIZE %d\n",
 				csf_img, sbuf.st_size, CSF_DATA_SIZE);
 			exit(EXIT_FAILURE);
 		}
@@ -1059,7 +1060,7 @@ int main(int argc, char **argv)
 		close(csf_ap_fd);
 
 		if (sbuf.st_size > CSF_DATA_SIZE) {
-			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+			fprintf(stderr, "%s: file size %" PRIu64 " is larger than CSF_DATA_SIZE %d\n",
 				csf_ap_img, sbuf.st_size, CSF_DATA_SIZE);
 			exit(EXIT_FAILURE);
 		}

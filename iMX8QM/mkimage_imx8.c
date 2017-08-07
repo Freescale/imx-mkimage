@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <inttypes.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -869,7 +870,7 @@ int main(int argc, char **argv)
 		set_imx_hdr_v3(&imx_header, 0, ivt_offset, INITIAL_LOAD_ADDR_AP_ROM, 1);
 	}
 
-	fprintf(stderr, "scfw size = %ld\n", sbuf.st_size);
+	fprintf(stderr, "scfw size = %" PRIu64 "\n", sbuf.st_size);
 
 	imx_header.boot_data[0].img[0].src = file_off;
 	imx_header.boot_data[0].img[0].dst = 0x30fe0000;
@@ -997,8 +998,8 @@ int main(int argc, char **argv)
 			imx_header.boot_data[1].bd_size = sizeof(boot_data_v3_t);
 			imx_header.boot_data[1].bd_flags = 0;
 
-			fprintf(stderr, "ap img off = 0x%lx\n", imx_header.boot_data[1].img[0].src);
-			fprintf(stderr, "ap img dst = 0x%lx\n", imx_header.boot_data[1].img[0].dst);
+			fprintf(stderr, "ap img off = 0x%" PRIx64 "\n", imx_header.boot_data[1].img[0].src);
+			fprintf(stderr, "ap img dst = 0x%" PRIx64 "\n", imx_header.boot_data[1].img[0].dst);
 			fprintf(stderr, "ap img size = 0x%x\n", imx_header.boot_data[1].img[0].size);
 
 			file_off += ALIGN(sbuf.st_size, sector_size);
@@ -1064,7 +1065,7 @@ int main(int argc, char **argv)
 		close(csf_fd);
 
 		if (sbuf.st_size > CSF_DATA_SIZE) {
-			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+			fprintf(stderr, "%s: file size %" PRIi64 " is larger than CSF_DATA_SIZE %d\n",
 				csf_img, sbuf.st_size, CSF_DATA_SIZE);
 			exit(EXIT_FAILURE);
 		}
@@ -1094,7 +1095,7 @@ int main(int argc, char **argv)
 		close(csf_ap_fd);
 
 		if (sbuf.st_size > CSF_DATA_SIZE) {
-			fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+			fprintf(stderr, "%s: file size %" PRIi64 " is larger than CSF_DATA_SIZE %d\n",
 				csf_img, sbuf.st_size, CSF_DATA_SIZE);
 			exit(EXIT_FAILURE);
 		}
@@ -1104,8 +1105,8 @@ int main(int argc, char **argv)
 		imx_header.boot_data[1].csf.size = CSF_DATA_SIZE;
 		imx_header.fhdr[1].csf = imx_header.boot_data[1].csf.dst;
 
-		fprintf(stderr, "ap csf off = 0x%lx\n", imx_header.boot_data[1].csf.src);
-		fprintf(stderr, "ap csf dst = 0x%lx\n", imx_header.boot_data[1].csf.dst);
+		fprintf(stderr, "ap csf off = 0x%" PRIx64 "\n", imx_header.boot_data[1].csf.src);
+		fprintf(stderr, "ap csf dst = 0x%" PRIx64 "\n", imx_header.boot_data[1].csf.dst);
 
 		file_off += ALIGN(CSF_DATA_SIZE, sector_size);
 	}
