@@ -11,6 +11,12 @@ N ?= latest
 SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
 
+ifneq ($(wildcard /usr/bin/rename.ul),)
+    RENAME = rename.ul   
+else
+    RENAME = rename   
+endif
+
 $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
@@ -56,4 +62,4 @@ nightly :
 	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
 	@$(WGET) -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
 	@mv -f Image boot
-	@rename "Image-" "" boot/*.dtb
+	@$(RENAME) "Image-" "" boot/*.dtb

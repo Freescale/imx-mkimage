@@ -16,6 +16,11 @@ N ?= latest
 SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
 
+ifneq ($(wildcard /usr/bin/rename.ul),)
+    RENAME = rename.ul   
+else
+    RENAME = rename   
+endif
 
 $(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file" 
