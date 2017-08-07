@@ -88,5 +88,5 @@ nightly :
 	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qm-*.dtb"
 	@$(WGET) -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
 	@mv -f Image boot
-	@rename "Image-" "" boot/*.dtb
+	@$(RENAME) "Image-" "" boot/*.dtb
 
