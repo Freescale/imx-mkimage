@@ -6,6 +6,7 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
+WGET = /usr/bin/wget
 N ?= latest
 SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
@@ -49,10 +50,10 @@ flash_ca35_ddrstress: $(MKIMG) scfw_tcm.bin mx8qxp_ddr_stress_test.bin
 
 nightly :
 	@rm -rf boot
-	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
-	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qxp.bin -O bl31.bin
-	@wget -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
-	@wget -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
-	@wget -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qxp.bin -O bl31.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
+	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
+	@$(WGET) -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
 	@mv -f Image boot
 	@rename "Image-" "" boot/*.dtb
