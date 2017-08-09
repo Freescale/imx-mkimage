@@ -1,4 +1,4 @@
-MKIMG = mkimage_imx8
+MKIMG = ../mkimage_imx8
 #DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
 #DCD_CFG_SRC = imx8qm_dcd_1.2GHz.cfg
 DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
@@ -6,10 +6,7 @@ DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
 DCD_CFG = imx8qm_dcd.cfg.tmp
 
 CC ?= gcc
-CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
-
-DDR_TRAIN ?= 0
 
 WGET = /usr/bin/wget
 N ?= latest
@@ -17,17 +14,15 @@ SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
 
 ifneq ($(wildcard /usr/bin/rename.ul),)
-    RENAME = rename.ul   
+    RENAME = rename.ul
 else
-    RENAME = rename   
+    RENAME = rename
 endif
 
-$(MKIMG): mkimage_imx8.c $(DCD_CFG_SRC)
-	@echo "Converting iMX8 DCD file" 
-	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
-	@echo "Compiling mkimage_imx8"
-	$(CC) $(CFLAGS) -o $@ mkimage_imx8.c
+$(DCD_CFG): $(DCD_CFG_SRC)
+	@echo "Converting iMX8 DCD file"
+	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
 u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
@@ -35,57 +30,52 @@ u-boot-atf.bin: u-boot.bin bl31.bin
 
 .PHONY: clean
 clean:
-	@rm -f $(MKIMG) $(DCD_CFG) .imx8_dcd.cfg.cfgtmp.d
+	@rm -f $(DCD_CFG) .imx8_dcd.cfg.cfgtmp.d
 
-flash_scfw: $(MKIMG) $(DCD_CFG) scfw_tcm.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -out flash.bin
-	@echo "Example: dd if=flash.bin of=[SD device] bs=1k seek=33" 
+flash_scfw: $(MKIMG) scfw_tcm.bin
+	./$(MKIMG) -soc QM -c -scfw scfw_tcm.bin -out flash.bin
 
 flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
 
 flash: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
+	./$(MKIMG) -soc QM -c -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
+
+
 
 flash_flexspi: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
-	./mkimage_imx8 -dev flexspi -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
+	./$(MKIMG) -dev flexspi -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
 
 flash_ca72: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -ap u-boot-atf.bin a72 0x80000000 -out flash.bin
+	./$(MKIMG) -soc QM -c -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a72 0x80000000 -out flash.bin
 
 flash_cm4_0: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -out flash.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -out flash.bin
 
 flash_cm4_1: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 1 0x38FE0000 -out flash.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 1 0x38FE0000 -out flash.bin
 
 flash_all: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin u-boot-atf.bin scd.bin csf.bin csf_ap.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -ap u-boot-atf.bin a53 0x80000000 -scd scd.bin -csf csf.bin -csf_ap csf_ap.bin -out flash.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34FE0000 -csf csf.bin -scd scd.bin -c -ap u-boot-atf.bin a53 0x80000000 -csf csf_ap.bin -out flash.bin
 
 flash_ca72_ddrstress: $(MKIMG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a72 0x00112000 -out flash.bin
+	./$(MKIMG) -soc QM -c -scfw scfw_tcm.bin -c -ap mx8qm_ddr_stress_test.bin a72 0x00112000 -out flash.bin
 
 flash_ca53_ddrstress: $(MKIMG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
-	./mkimage_imx8 -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
+	./$(MKIMG) -soc QM -c -scfw scfw_tcm.bin -c -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
 
 flash_ca72_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a72 0x00112000 -out flash.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -c -ap mx8qm_ddr_stress_test.bin a72 0x00112000 -out flash.bin
 
 flash_ca53_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
-
-flash_aprom_ddr_dcd: $(MKIMG) $(DCD_CFG)
-	./mkimage_imx8 -dcd $(DCD_CFG) -scfw scfw_tcm.bin -aprom aprom_ddr.bin a53 0x80000000 -ap u-boot-atf.bin a53 0x90000000 -csf_ap csf_ap.bin -out flash.bin
-
-flash_aprom_ddr:
-	${MAKE} DDR_TRAIN=1 flash_aprom_ddr_dcd
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -c -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
 
 nightly :
 	@rm -rf boot
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qm-scfw-tcm.bin -O scfw_tcm.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qm.bin -O bl31.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qmlpddr4arm2.bin-sd -O u-boot.bin
-	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qm-*.dtb"
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qxp.bin -O bl31.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
+	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
 	@$(WGET) -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
 	@mv -f Image boot
 	@$(RENAME) "Image-" "" boot/*.dtb
