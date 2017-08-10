@@ -145,6 +145,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
 
                         file_off += ALIGN(sbuf.st_size, sector_size);
                         tmp_to = ALIGN((imx_header.boot_data[container].img[cont_img_count].dst + sbuf.st_size), IMG_AUTO_ALIGN);
+                        cont_img_count++;
                         break;
                 case M4:
                         check_file(&sbuf, img_sp->filename);
@@ -172,6 +173,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                             exit(EXIT_FAILURE);
                         }
                         file_off += ALIGN(sbuf.st_size, sector_size);
+                        cont_img_count++;
                         break;
                 case AP:
                         check_file(&sbuf, img_sp->filename);
@@ -199,6 +201,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 
                         file_off += ALIGN(sbuf.st_size, sector_size);
+                        cont_img_count++;
                         break;
                 case SCD:
                         check_file(&sbuf, img_sp->filename);

@@ -8,6 +8,9 @@ DCD_CFG = imx8qm_dcd.cfg.tmp
 CC ?= gcc
 INCLUDE = ./lib
 
+#set default DDR_training to be in DCDs
+
+DDR_TRAIN ?= 1
 WGET = /usr/bin/wget
 N ?= latest
 SERVER=http://yb2.am.freescale.net
@@ -22,7 +25,7 @@ endif
 
 $(DCD_CFG): $(DCD_CFG_SRC)
 	@echo "Converting iMX8 DCD file"
-	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
+	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
 u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
@@ -69,6 +72,9 @@ flash_ca72_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test
 
 flash_ca53_ddrstress_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin mx8qm_ddr_stress_test.bin
 	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -c -ap mx8qm_ddr_stress_test.bin a53 0x00112000 -out flash.bin
+
+flash_cm4_01_ddr: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m40_ddr.bin m41_ddr.bin
+	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m40_ddr.bin 0 0x88400000 -m4 m41_ddr.bin 1 0x88800000 -out flash.bin
 
 nightly :
 	@rm -rf boot

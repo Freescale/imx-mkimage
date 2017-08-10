@@ -22,6 +22,10 @@ all: $(MKIMG) help
 
 clean:
 	@rm $(MKIMG)
+	$(MAKE) -C iMX8QM clean
+	$(MAKE) -C iMX8QX clean
+	$(MAKE) -C iMX8M clean
+	$(MAKE) -C iMX8dv clean
 
 $(MKIMG): $(SRCS)
 	@echo "Compiling mkimage_imx8"
