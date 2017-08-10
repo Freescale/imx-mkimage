@@ -7,6 +7,11 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
+WGET = /usr/bin/wget
+N ?= latest
+SERVER=http://yb2.am.freescale.net
+DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
+
 $(MKIMG): mkimage_imx8.c
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) mkimage_imx8.c -o $(MKIMG) -lz
@@ -45,6 +50,14 @@ flash_spl_uboot: $(MKIMG) u-boot-spl-ddr.bin u-boot-atf.bin
 
 flash_spl_uboot_tee: $(MKIMG) u-boot-spl-ddr.bin u-boot-atf-tee.bin
 	./mkimage_imx8 -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40001000 0x60000 -out $(OUTIMG)
+
+nightly :
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/lpddr4_pmu_train_dmem.bin -O lpddr4_pmu_train_dmem.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/lpddr4_pmu_train_imem.bin -O lpddr4_pmu_train_imem.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8mq.bin -O bl31.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-spl-imx8mqevk.bin-sd -O u-boot-spl.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8mqevk.bin-sd -O u-boot.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/hdmi_imx8m.bin -O hdmi_imx8m.bin
 
 #flash_dcd_uboot: $(MKIMG) $(DCD_CFG) u-boot-atf.bin
 #	./mkimage_imx8 -dcd $(DCD_CFG) -loader u-boot-atf.bin 0x40001000 -out $(OUTIMG)
