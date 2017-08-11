@@ -131,7 +131,7 @@ int build_container_qx(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         fprintf(stdout, "scfw size = %ld\n", sbuf.st_size);
                         imx_header.boot_data[container].img[cont_img_count].src = file_off;
                         img_sp->src = file_off;
-                        imx_header.boot_data[container].img[cont_img_count].dst =   0x30fe0000; /* hard code scfw entry address */
+                        imx_header.boot_data[container].img[cont_img_count].dst =   0x1ffe0000; /* hard code scfw entry address */
                         imx_header.boot_data[container].img[cont_img_count].entry = 0x1ffe0000;
                         imx_header.boot_data[container].img[cont_img_count].size = sbuf.st_size;
                         imx_header.boot_data[container].img[cont_img_count].flags2 = 0;
