@@ -51,6 +51,9 @@ flash_all: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin u-boot-atf.bin scd.bin 
 flash_ca35_ddrstress: $(MKIMG) scfw_tcm.bin mx8qxp_ddr_stress_test.bin
 	./$(MKIMG) -soc QX -c -scfw scfw_tcm.bin -c -ap mx8qxp_ddr_stress_test.bin a35 0x00112000 -out flash.bin
 
+flash_cm4ddr: $(MKIMG) $(DCD_CFG) scfw_tcm.bin m4_image.bin
+	./$(MKIMG) -soc QX -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x88200000 -out flash.bin
+
 nightly :
 	@rm -rf boot
 	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
