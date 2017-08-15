@@ -6,6 +6,7 @@
  *
  */
 
+#include <inttypes.h>
 #include "mkimage_common.h"
 
 #define MAX_NUM_IMGS            4
@@ -132,7 +133,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
               switch(img_sp->option){
                 case SCFW:
                         check_file(&sbuf, img_sp->filename);
-                        fprintf(stdout, "scfw size = %ld\n", sbuf.st_size);
+                        fprintf(stdout, "scfw size = %" PRIi64 "\n", sbuf.st_size);
                         imx_header.boot_data[container].img[cont_img_count].src = file_off;
                         img_sp->src = file_off;
                         imx_header.boot_data[container].img[cont_img_count].dst =   0x30fe0000; /* hard code scfw entry address */
@@ -169,7 +170,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                             imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
                         }
                         else{
-                            fprintf(stderr, "Error: invalid m4 core id: %ld\n", img_sp->ext);
+                            fprintf(stderr, "Error: invalid m4 core id: %" PRIi64 "\n", img_sp->ext);
                             exit(EXIT_FAILURE);
                         }
                         file_off += ALIGN(sbuf.st_size, sector_size);
@@ -194,7 +195,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                           imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_A72_0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
                         }
                         else {
-                          fprintf(stderr, "Error: invalid AP core id: %ld\n", img_sp->ext);
+                          fprintf(stderr, "Error: invalid AP core id: %" PRIi64 "\n", img_sp->ext);
                           exit(EXIT_FAILURE);
                         }
                         imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
@@ -217,7 +218,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                 case CSF:
                         check_file(&sbuf, img_sp->filename);
                         if (sbuf.st_size > CSF_DATA_SIZE) {
-                             fprintf(stderr, "%s: file size %ld is larger than CSF_DATA_SIZE %d\n",
+                             fprintf(stderr, "%s: file size %" PRIi64 " is larger than CSF_DATA_SIZE %d\n",
                                               img_sp->filename, sbuf.st_size, CSF_DATA_SIZE);
                              exit(EXIT_FAILURE);
                         }

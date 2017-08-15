@@ -1,5 +1,4 @@
 
-
 MKIMG = $(PWD)/mkimage_imx8
 CC ?= gcc
 CFLAGS ?= -g -O2 -Wall -std=c99 -static
@@ -11,21 +10,19 @@ vpath $(INCLUDE)
 
 .PHONY:  clean all bin
 
-
 .DEFAULT:
-	$(MAKE) bin
-	$(MAKE) -C $(SOC) $@
+	@$(MAKE) -s --no-print-directory bin
+	@$(MAKE) --no-print-directory -C $(SOC) -f soc.mak $@
 
 #print out usage as the default target
 all: $(MKIMG) help
 
-
 clean:
-	@rm $(MKIMG)
-	$(MAKE) -C iMX8QM clean
-	$(MAKE) -C iMX8QX clean
-	$(MAKE) -C iMX8M clean
-	$(MAKE) -C iMX8dv clean
+	@rm -f $(MKIMG)
+	@$(MAKE) --no-print-directory -C iMX8QM -f soc.mak clean
+	@$(MAKE) --no-print-directory -C iMX8QX -f soc.mak  clean
+	@$(MAKE) --no-print-directory -C iMX8M -f soc.mak  clean
+	@$(MAKE) --no-print-directory -C iMX8dv -f soc.mak  clean
 
 $(MKIMG): $(SRCS)
 	@echo "Compiling mkimage_imx8"
@@ -53,6 +50,4 @@ help:
 	@echo "	  flash_spl_uboot          - u-boot spl"
 	@echo "	  flash_spl_uboot_tee      - u-boot spl w/tee"
 	@echo
-	@echo
-
 

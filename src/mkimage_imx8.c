@@ -22,6 +22,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #include "mkimage_common.h"
 
@@ -568,8 +569,8 @@ int main(int argc, char **argv)
 				if ((optind < argc && *argv[optind] != '-') && (optind+1 < argc &&*argv[optind+1] != '-' )) {
 					param_stack[p_idx].ext = strtol(argv[optind++], NULL, 0);
 					param_stack[p_idx].entry = (uint32_t) strtoll(argv[optind++], NULL, 0);
-					fprintf(stdout, "\tcore: %ld", param_stack[p_idx].ext);
-					fprintf(stdout, " addr: 0x%08lx\n", param_stack[p_idx++].entry);
+					fprintf(stdout, "\tcore: %" PRIi64, param_stack[p_idx].ext);
+					fprintf(stdout, " addr: 0x%08" PRIx64 "\n", param_stack[p_idx++].entry);
 				} else {
 					fprintf(stderr, "\n-m4 option require THREE arguments: filename, core: 0/1, start address in hex\n\n");
 					exit(EXIT_FAILURE);
@@ -595,7 +596,7 @@ int main(int argc, char **argv)
 
 					param_stack[p_idx].entry = (uint32_t) strtoll(argv[optind++], NULL, 0);
 
-					fprintf(stdout, " addr: 0x%08lx\n", param_stack[p_idx++].entry);
+					fprintf(stdout, " addr: 0x%08" PRIx64 "\n", param_stack[p_idx++].entry);
 				} else {
 					fprintf(stderr, "\n-ap option require THREE arguments: filename, a35/a53/a72, start address in hex\n\n");
 					exit(EXIT_FAILURE);
