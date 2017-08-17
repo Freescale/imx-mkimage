@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -156,7 +157,7 @@ typedef struct {
 #define IVT_OFFSET_FLEXSPI      (0x1000)
 #define IVT_OFFSET_SD           (0x400)
 #define IVT_OFFSET_SATA         (0x400)
-#define IVT_OFFSET_EMMC         (0x000)
+#define IVT_OFFSET_EMMC         (0x400)
 
 #define CSF_DATA_SIZE       (0x4000)
 #define INITIAL_LOAD_ADDR_SCU_ROM 0x2000e000
@@ -289,10 +290,10 @@ void parse_cfg_fld(dcd_v2_t *dcd_v2, int32_t *cmd,
 uint32_t parse_cfg_file(dcd_v2_t *dcd_v2, char *name);
 
 int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char * out_file,
-                image_t* image_stack);
+                bool emmc_fastboot, image_t* image_stack);
 
 int build_container_qx(uint32_t sector_size, uint32_t ivt_offset, char * out_file,
-                image_t* image_stack);
+                bool emmc_fastboot, image_t* image_stack);
 
 
 

@@ -493,6 +493,7 @@ int main(int argc, char **argv)
 	char *ofname = NULL;
         bool scfw = false;
         bool output = false;
+        bool emmc_fastboot = false;
 
         int container = -1;
         image_t param_stack[IMG_STACK_SIZE];/* stack of input images */
@@ -630,9 +631,9 @@ int main(int argc, char **argv)
 					ivt_offset = IVT_OFFSET_SD;
 				} else if (!strcmp(optarg, "nand")) {
                                         sector_size = 0x8000;/* sector size for NAND */
-				} else if (!strcmp(optarg, "emmc")) {
+				} else if (!strcmp(optarg, "emmc_fast")) {
                                         ivt_offset = IVT_OFFSET_EMMC;
-                                        //auto_align = 0x200;/* still working on it */
+                                        emmc_fastboot = true;/* emmc boot */
                                 } else {
 					fprintf(stdout, "\n-dev option, Valid boot devices are:\r\n sd\r\nflexspi\r\nnand\n\n");
 					exit(EXIT_FAILURE);
@@ -673,10 +674,10 @@ int main(int argc, char **argv)
         switch(soc)
         {
           case QX:
-              build_container_qx(sector_size, ivt_offset, ofname, (image_t *) param_stack);
+              build_container_qx(sector_size, ivt_offset, ofname, emmc_fastboot, (image_t *) param_stack);
               break;
           case QM:
-              build_container_qm(sector_size, ivt_offset, ofname, (image_t *) param_stack);
+              build_container_qm(sector_size, ivt_offset, ofname, emmc_fastboot, (image_t *) param_stack);
               break;
           default:
               fprintf(stderr, " unrecognized SOC defined");

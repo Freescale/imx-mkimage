@@ -77,7 +77,7 @@ static void set_imx_hdr_v3(imx_header_v3_t *imxhdr, uint32_t dcd_len,
 	fhdr_v3->scd = 0;
 }
 
-int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file, image_t* image_stack)
+int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file, bool emmc_fastboot, image_t* image_stack)
 {
 	int file_off, ofd;
 
@@ -104,7 +104,15 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
 
 	fprintf(stderr, "Platform:\ti.MX8QM\n");
 
-	file_off = ALIGN(sizeof(imx_header_v3_t) + ivt_offset, sector_size);
+
+        if(emmc_fastboot){/* start images after initial 8K */
+          file_off = 0x2000 - ivt_offset;
+        }
+        else
+        {
+          file_off = ALIGN(sizeof(imx_header_v3_t) + ivt_offset, sector_size);
+        }
+
 
 
         do{ /* process DCD if it is found */
@@ -237,6 +245,11 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         break;
                 case NEW_CONTAINER: /* move the counters forward to start on a new container */
                         container++;
+                        if(emmc_fastboot && container>0)
+                        { /* exit if more than 0th container is found */
+                          fprintf(stderr, "EMMC Fastboot only supports one container");
+                          exit(EXIT_FAILURE);
+                        }
                         cont_img_count=0; /* reset img count when moving to new container */
                         break;
                 case DCD:
@@ -267,6 +280,9 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
             fprintf(stderr, "error writing image hdr\n");
             exit(1);
         }
+
+        if(emmc_fastboot)
+          ivt_offset = 0;/*set ivt offset to 0 if emmc */
 
         /* step through the image stack again this time copying images to final bin */
         img_sp = image_stack;
