@@ -662,6 +662,12 @@ int main(int argc, char **argv)
           exit(EXIT_FAILURE);
         }
 
+        if(container < 0)
+        { /* check to make sure there is at least 1 container defined */
+          fprintf(stderr, " No Container defined");
+          exit(EXIT_FAILURE);
+        }
+
         if(!(scfw && output)){/* jump out if either scfw or output params are missing */
           fprintf(stderr, "mandatory args scfw and output file name missing! abort\n");
           exit(EXIT_FAILURE);

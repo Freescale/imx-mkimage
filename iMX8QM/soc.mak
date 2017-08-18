@@ -86,8 +86,7 @@ flash_cm4_1_ddr:
 	./$(MKIMG) -soc QM -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m41_ddr.bin 1 0x88800000 -out flash.bin
 
 flash_fastboot: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
-	./$(MKIMG) -soc QM -dev emmc_fast -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
-
+	./$(MKIMG) -soc QM -dev emmc_fast -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -m4 m4_image.bin 0 0x34fe0000 -ap u-boot-atf.bin a53 0x80000000 -out flash.bin
 nightly :
 	@rm -rf boot
 	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qm-scfw-tcm.bin -O scfw_tcm.bin

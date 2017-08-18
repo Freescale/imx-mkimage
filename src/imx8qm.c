@@ -245,11 +245,6 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         break;
                 case NEW_CONTAINER: /* move the counters forward to start on a new container */
                         container++;
-                        if(emmc_fastboot && container>0)
-                        { /* exit if more than 0th container is found */
-                          fprintf(stderr, "EMMC Fastboot only supports one container");
-                          exit(EXIT_FAILURE);
-                        }
                         cont_img_count=0; /* reset img count when moving to new container */
                         break;
                 case DCD:
