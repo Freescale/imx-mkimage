@@ -41,7 +41,8 @@ typedef enum option_type {
     CSF,
     FLAG,
     DEVICE,
-    NEW_CONTAINER
+    NEW_CONTAINER,
+    PARTITION
 } option_type_t;
 
 

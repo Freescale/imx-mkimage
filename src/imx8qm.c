@@ -85,13 +85,12 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
 	static imx_header_v3_t imx_header;
 	struct stat sbuf;
 	uint64_t tmp_to = 0; /*used for offset of memory to find images */
+        uint32_t custom_partition = 0;/* 0 denotes defaults */
 
 
         image_t* img_sp = image_stack;
         int container = -1;
         int cont_img_count = 0; /* indexes to arrange the container */
-
-
 
 
 	memset((char*)&imx_header, 0, sizeof(imx_header_v3_t));
@@ -102,7 +101,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
           exit(EXIT_FAILURE);
         }
 
-	fprintf(stderr, "Platform:\ti.MX8QM\n");
+	fprintf(stdout, "Platform:\ti.MX8QM\n");
 
 
         if(emmc_fastboot){/* start images after initial 8K */
@@ -118,7 +117,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
         do{ /* process DCD if it is found */
           if (img_sp->option == DCD) {
             dcd_len = parse_cfg_file(&imx_header.dcd_table, img_sp->filename);
-            fprintf(stderr, "dcd len = %d\n", dcd_len);
+            fprintf(stdout, "dcd len = %d\n", dcd_len);
           }
           img_sp++;
         }
@@ -169,17 +168,25 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                             imx_header.boot_data[container].img[cont_img_count].flags = (CORE_CM4_0 & BOOT_IMG_FLAGS_CORE_MASK);
                             imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_M4_0_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
                             imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_M4_0_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-                            imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
                         }
                         else if (img_sp->ext == 1) {
                             imx_header.boot_data[container].img[cont_img_count].flags = (CORE_CM4_1 & BOOT_IMG_FLAGS_CORE_MASK);
                             imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_M4_1_PID0 << BOOT_IMG_FLAGS_CPU_RID_SHIFT);
                             imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_M4_1_MU_1A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-                            imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
                         }
                         else{
                             fprintf(stderr, "Error: invalid m4 core id: %" PRIi64 "\n", img_sp->ext);
                             exit(EXIT_FAILURE);
+                        }
+
+                        if(custom_partition != 0)
+                        {
+                            imx_header.boot_data[container].img[cont_img_count].flags |= (custom_partition << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+                            custom_partition = 0;
+                        }
+                        else
+                        {
+                            imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_M4 << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
                         }
                         file_off += ALIGN(sbuf.st_size, sector_size);
                         cont_img_count++;
@@ -207,8 +214,16 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                           exit(EXIT_FAILURE);
                         }
                         imx_header.boot_data[container].img[cont_img_count].flags |= (SC_R_MU_0A << BOOT_IMG_FLAGS_MU_RID_SHIFT);
-                        imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
 
+                        if(custom_partition != 0)
+                        {
+                          imx_header.boot_data[container].img[cont_img_count].flags |= (custom_partition << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+                          custom_partition = 0;
+                        }
+                        else
+                        {
+                          imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
+                        }
                         file_off += ALIGN(sbuf.st_size, sector_size);
                         cont_img_count++;
                         break;
@@ -249,6 +264,9 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         break;
                 case DCD:
                         break;
+                case PARTITION: /* keep custom partition until next executable image */
+                        custom_partition = img_sp->entry;
+                        break;
                 default:
                         fprintf(stderr, "unrecognized option in input stack");
                         exit(EXIT_FAILURE);
@@ -282,11 +300,12 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
         /* step through the image stack again this time copying images to final bin */
         img_sp = image_stack;
         while(img_sp->option != NO_IMG){ /* stop once we reach null terminator */
-          if (img_sp->option == DCD      ||
-              img_sp->option == OUTPUT   ||
-              img_sp->option == FLAG     ||
-              img_sp->option == DEVICE   ||
-              img_sp->option == NEW_CONTAINER) {
+          if (img_sp->option == DCD           ||
+              img_sp->option == OUTPUT        ||
+              img_sp->option == FLAG          ||
+              img_sp->option == DEVICE        ||
+              img_sp->option == NEW_CONTAINER ||
+              img_sp->option == PARTITION) {
             img_sp++;
             continue;/* skip writing to the output file if not an image option */
           }

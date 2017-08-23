@@ -514,8 +514,9 @@ int main(int argc, char **argv)
 		{"scd", required_argument, NULL, 'x'},
 		{"csf", required_argument, NULL, 'z'},
 		{"dev", required_argument, NULL, 'e'},
-		{"soc", required_argument, NULL, 'p'},
+		{"soc", required_argument, NULL, 's'},
 		{"container", no_argument, NULL, 'c'},
+		{"partition", required_argument, NULL, 'p'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -542,6 +543,11 @@ int main(int argc, char **argv)
 				fprintf(stderr, "\n");
 				break;
                         case 'p':
+                                fprintf(stdout, "PARTITION:\t%s\n", optarg);
+                                param_stack[p_idx].option = PARTITION;
+                                param_stack[p_idx++].entry = (uint32_t) strtoll(optarg, NULL, 0);
+                                break;
+                        case 's':
                                 if(!strncmp(optarg, "QX", 2))
                                   soc = QX;
                                 else if (!strncmp(optarg, "QM", 2))
