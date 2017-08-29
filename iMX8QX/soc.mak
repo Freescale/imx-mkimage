@@ -59,9 +59,9 @@ flash_fastboot: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin m4_image.bin
 
 nightly :
 	@rm -rf boot
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/bl31-imx8qxp.bin -O bl31.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/imx8qx/mx8qx-scfw-tcm.bin -O scfw_tcm.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/imx8qx/bl31-imx8qxp.bin -O bl31.bin
+	@$(WGET) -q $(SERVER)/$(DIR)/imx-boot/imx-boot-tools/imx8qx/u-boot-imx8qxplpddr4arm2.bin-sd -O u-boot.bin
 	@$(WGET) -qr -nd -l1 -np $(SERVER)/$(DIR) -P boot -A "Image-fsl-imx8qxp-*.dtb"
 	@$(WGET) -q $(SERVER)/$(DIR)/Image-imx8_all.bin -O Image
 	@mv -f Image boot
