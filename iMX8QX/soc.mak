@@ -1,5 +1,5 @@
 MKIMG = ../mkimage_imx8
-DCD_CFG_SRC = imx8qx_dcd.cfg
+DCD_CFG_SRC = imx8qx_dcd_1.2GHz.cfg
 DCD_CFG = imx8qx_dcd.cfg.tmp
 
 CC ?= gcc
