@@ -195,6 +195,8 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                         check_file(&sbuf, img_sp->filename);
                         imx_header.boot_data[container].img[cont_img_count].src = file_off;
                         img_sp->src = file_off;
+                        fprintf(stdout, "AP image size = %" PRIi64 "\n", sbuf.st_size);
+                        fprintf(stdout, "AP image offset = %x\n", file_off);
                         imx_header.boot_data[container].img[cont_img_count].dst = img_sp->entry;
                         imx_header.boot_data[container].img[cont_img_count].size = sbuf.st_size;
                         imx_header.boot_data[container].img[cont_img_count].entry = img_sp->entry;
