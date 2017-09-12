@@ -29,7 +29,9 @@ $(DCD_CFG): $(DCD_CFG_SRC)
 
 u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
-	@dd if=u-boot.bin of=u-boot-atf.bin bs=1K seek=128
+	@git rev-parse --short=8 HEAD > head.hash
+	@cat u-boot.bin head.hash > u-boot-hash.bin
+	@dd if=u-boot-hash.bin of=u-boot-atf.bin bs=1K seek=128
 
 .PHONY: clean
 clean:
