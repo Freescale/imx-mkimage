@@ -1,7 +1,7 @@
 MKIMG = ../mkimage_imx8
-DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
+#DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
 #DCD_CFG_SRC = imx8qm_dcd_1.2GHz.cfg
-#DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
+DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
 
 DCD_CFG = imx8qm_dcd.cfg.tmp
 
