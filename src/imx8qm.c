@@ -227,6 +227,8 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                           imx_header.boot_data[container].img[cont_img_count].flags |= (PARTITION_ID_AP << BOOT_IMG_FLAGS_PARTITION_ID_SHIFT);
                         }
                         file_off += ALIGN(sbuf.st_size, sector_size);
+                        /* only change the offset if not the first container */
+                        tmp_to = (container > 0) ? ALIGN((img_sp->entry + sbuf.st_size), IMG_AUTO_ALIGN) : tmp_to;
                         cont_img_count++;
                         break;
                 case SCD:
@@ -263,6 +265,7 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                 case NEW_CONTAINER: /* move the counters forward to start on a new container */
                         container++;
                         cont_img_count=0; /* reset img count when moving to new container */
+                        tmp_to = 0; /* reset destination offset counter per container */
                         break;
                 case DCD:
                         break;
