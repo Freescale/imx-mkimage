@@ -17,10 +17,11 @@ else
     RENAME = rename
 endif
 
-$(DCD_CFG): $(DCD_CFG_SRC)
+$(DCD_CFG): FORCE
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 
+FORCE:
 
 u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin

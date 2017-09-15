@@ -1,7 +1,7 @@
 MKIMG = ../mkimage_imx8
-#DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
+DCD_CFG_SRC = imx8qm_dcd_800MHz.cfg
 #DCD_CFG_SRC = imx8qm_dcd_1.2GHz.cfg
-DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
+#DCD_CFG_SRC = imx8qm_dcd_1.6GHz.cfg
 
 DCD_CFG = imx8qm_dcd.cfg.tmp
 
@@ -23,9 +23,11 @@ else
 endif
 
 
-$(DCD_CFG): $(DCD_CFG_SRC)
+$(DCD_CFG): FORCE
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qm_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
+
+FORCE:
 
 u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
