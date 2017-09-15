@@ -25,6 +25,7 @@
 #include <inttypes.h>
 
 #include "mkimage_common.h"
+#include "build_info.h"
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -517,6 +518,7 @@ int main(int argc, char **argv)
 		{"soc", required_argument, NULL, 's'},
 		{"container", no_argument, NULL, 'c'},
 		{"partition", required_argument, NULL, 'p'},
+		{"commit", no_argument, NULL, 't'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -653,6 +655,9 @@ int main(int argc, char **argv)
 				fprintf(stderr, "option %c missing arguments\n", optopt);
                                 exit(EXIT_FAILURE);
 				break;
+			case 't':
+				fprintf(stdout, "%x\n", MKIMAGE_COMMIT);
+				exit(0);
 			case '?':
 			default:
 				/* invalid option */

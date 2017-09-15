@@ -4,7 +4,12 @@ CC ?= gcc
 CFLAGS ?= -g -O2 -Wall -std=c99 -static
 INCLUDE += $(CURR_DIR)/src
 
-SRCS = src/imx8qm.c  src/imx8qx.c  src/mkimage_imx8.c
+SRCS = src/imx8qm.c  src/imx8qx.c  src/mkimage_imx8.c src/build_info.h
+
+src/build_info.h:
+	@echo -n '#define MKIMAGE_COMMIT 0x' >> src/build_info.h
+	@git rev-parse --short=8 HEAD >> src/build_info.h
+	@echo '' >> src/build_info.h
 
 vpath $(INCLUDE)
 
