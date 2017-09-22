@@ -56,4 +56,6 @@ help:
 	@echo "	  flash_spl_uboot          - u-boot spl"
 	@echo "	  flash_spl_uboot_tee      - u-boot spl w/tee"
 	@echo
+	@echo "Typical flash cmd: dd if=iMX8QM/flash.bin of=/dev/<your device> bs=1k seek=33"
+	@echo
 
