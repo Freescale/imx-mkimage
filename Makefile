@@ -4,7 +4,7 @@ CC ?= gcc
 CFLAGS ?= -g -O2 -Wall -std=c99 -static
 INCLUDE += $(CURR_DIR)/src
 
-SRCS = src/imx8qm.c  src/imx8qx.c  src/mkimage_imx8.c src/build_info.h
+SRCS = src/imx8qm.c  src/imx8qx.c  src/mkimage_imx8.c
 
 
 vpath $(INCLUDE)
@@ -20,6 +20,7 @@ all: $(MKIMG) help
 
 clean:
 	@rm -f $(MKIMG)
+	@rm -f src/build_info.h
 	@$(MAKE) --no-print-directory -C iMX8QM -f soc.mak clean
 	@$(MAKE) --no-print-directory -C iMX8QX -f soc.mak  clean
 	@$(MAKE) --no-print-directory -C iMX8M -f soc.mak  clean
