@@ -656,7 +656,7 @@ int main(int argc, char **argv)
                                 exit(EXIT_FAILURE);
 				break;
 			case 't':
-				fprintf(stdout, "%x\n", MKIMAGE_COMMIT);
+				fprintf(stdout, "%08x\n", MKIMAGE_COMMIT);
 				exit(0);
 			case '?':
 			default:
