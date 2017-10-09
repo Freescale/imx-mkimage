@@ -2,6 +2,9 @@ MKIMG = ../mkimage_imx8
 DCD_CFG_SRC = imx8qx_dcd_1.2GHz.cfg
 DCD_CFG = imx8qx_dcd.cfg.tmp
 
+DCD_CFG_16BIT_SRC = imx8qx_dcd_16bit_1.2GHz.cfg
+DCD_16BIT_CFG = imx8qx_16bit_dcd.cfg.tmp
+
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
@@ -23,7 +26,7 @@ endif
 $(DCD_CFG): FORCE
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
-
+	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_16BIT_CFG) $(DCD_CFG_16BIT_SRC)
 FORCE:
 
 u-boot-atf.bin: u-boot.bin bl31.bin
@@ -41,6 +44,9 @@ flash_scfw: $(MKIMG) scfw_tcm.bin
 
 flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
 	./$(MKIMG) -soc QX -c -dcd $(DCD_CFG) -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
+
+flash_16bit_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
+	./$(MKIMG) -soc QX -c -dcd $(DCD_16BIT_CFG) -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
 
 flash: $(MKIMG) scfw_tcm.bin u-boot-atf.bin
 	./$(MKIMG) -soc QX -c -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
