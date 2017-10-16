@@ -49,16 +49,16 @@ u-boot.itb:
 	./mkimage_uboot -E -p 0x3000 -f u-boot.its u-boot.itb
 
 flash_hdmi_spl_uboot: $(MKIMG) signed_hdmi_imx8m.bin u-boot-spl-ddr.bin u-boot.itb
-	./mkimage_imx8 -fit -signed_hdmi signed_hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot.itb 0x40001000 0x60000 -out $(OUTIMG)
+	./mkimage_imx8 -fit -signed_hdmi signed_hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot.itb 0x40200000 0x60000 -out $(OUTIMG)
 
 flash_hdmi_spl_uboot_tee: $(MKIMG) signed_hdmi_imx8m.bin u-boot-spl-ddr.bin u-boot-atf-tee.bin
-	./mkimage_imx8 -signed_hdmi signed_hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40001000 0x60000 -out $(OUTIMG)
+	./mkimage_imx8 -signed_hdmi signed_hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40200000 0x60000 -out $(OUTIMG)
 
 flash_spl_uboot: $(MKIMG) u-boot-spl-ddr.bin u-boot.itb
-	./mkimage_imx8 -fit -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot.itb 0x40001000 0x60000 -out $(OUTIMG)
+	./mkimage_imx8 -fit -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot.itb 0x40200000 0x60000 -out $(OUTIMG)
 
 flash_spl_uboot_tee: $(MKIMG) u-boot-spl-ddr.bin u-boot-atf-tee.bin
-	./mkimage_imx8 -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40001000 0x60000 -out $(OUTIMG)
+	./mkimage_imx8 -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40200000 0x60000 -out $(OUTIMG)
 
 nightly :
 	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_1d_dmem.bin -O lpddr4_pmu_train_1d_dmem.bin

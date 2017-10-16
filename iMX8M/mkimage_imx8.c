@@ -103,6 +103,25 @@ typedef struct uimage_header {
 	uint8_t			ih_name[IH_NMLEN];	/* Image Name		*/
 } uimage_header_t;
 
+struct fdt_header {
+	uint32_t magic;			 /* magic word FDT_MAGIC */
+	uint32_t totalsize;		 /* total size of DT block */
+	uint32_t off_dt_struct;		 /* offset to structure */
+	uint32_t off_dt_strings;		 /* offset to strings */
+	uint32_t off_mem_rsvmap;		 /* offset to memory reserve map */
+	uint32_t version;		 /* format version */
+	uint32_t last_comp_version;	 /* last compatible version */
+
+	/* version 2 fields below */
+	uint32_t boot_cpuid_phys;	 /* Which physical CPU id we're
+					    booting on */
+	/* version 3 fields below */
+	uint32_t size_dt_strings;	 /* size of the strings block */
+
+	/* version 17 fields below */
+	uint32_t size_dt_struct;		 /* size of the structure block */
+};
+
 /* Command tags and parameters */
 #define HAB_DATA_WIDTH_BYTE 1 /* 8-bit value */
 #define HAB_DATA_WIDTH_HALF 2 /* 16-bit value */
@@ -158,6 +177,9 @@ typedef struct uimage_header {
 #define IH_ARCH_ARM	2
 #define IH_TYPE_FIRMWARE 5
 #define IH_COMP_NONE 0
+
+#define FDT_MAGIC	0xd00dfeed
+#define CSF_SIZE 0x2000
 
 #define ALIGN(x,a)		__ALIGN_MASK((x),(__typeof__(x))(a)-1, a)
 #define __ALIGN_MASK(x,mask,mask2)	(((x)+(mask))/(mask2)*(mask2))
@@ -216,7 +238,48 @@ typedef struct uimage_header {
 # define be64_to_cpu(x)		(x)
 #endif
 
+#define fdt32_to_cpu(x)		be32_to_cpu(x)
+
+#define fdt_get_header(fdt, field) \
+	(fdt32_to_cpu(((const struct fdt_header *)(fdt))->field))
+#define fdt_magic(fdt)			(fdt_get_header(fdt, magic))
+#define fdt_totalsize(fdt)		(fdt_get_header(fdt, totalsize))
+#define fdt_off_dt_struct(fdt)		(fdt_get_header(fdt, off_dt_struct))
+#define fdt_off_dt_strings(fdt)		(fdt_get_header(fdt, off_dt_strings))
+#define fdt_off_mem_rsvmap(fdt)		(fdt_get_header(fdt, off_mem_rsvmap))
+#define fdt_version(fdt)		(fdt_get_header(fdt, version))
+#define fdt_last_comp_version(fdt)	(fdt_get_header(fdt, last_comp_version))
+#define fdt_boot_cpuid_phys(fdt)	(fdt_get_header(fdt, boot_cpuid_phys))
+#define fdt_size_dt_strings(fdt)	(fdt_get_header(fdt, size_dt_strings))
+#define fdt_size_dt_struct(fdt)		(fdt_get_header(fdt, size_dt_struct))
+
 #define UNDEFINED 0xFFFFFFFF
+
+static void fill_zero(int ifd, int size, int offset)
+{
+	int fill_size;
+	uint8_t zeros[4096];
+	memset(zeros, 0, sizeof(zeros));
+
+	lseek(ifd, offset, SEEK_SET);
+
+	while (size) {
+
+		if (size > 4096)
+			fill_size = 4096;
+		else
+			fill_size = size;
+
+		if (write(ifd, (char *)&zeros, fill_size) != fill_size) {
+			fprintf(stderr, "Write error: %s\n",
+				strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		size -= fill_size;
+
+	};
+}
 
 static void
 copy_file (int ifd, const char *datafile, int pad, int offset, int datafile_offset)
@@ -690,11 +753,11 @@ void set_uimage_header(uimage_header_t * uimage_hd_ptr, int fd, uint32_t ep)
 	}
 
 	checksum = crc32(0,
-			(const unsigned char *)(file_ptr), sbuf.st_size);
+			(const unsigned char *)(file_ptr), sbuf.st_size); /* crc for image and ivt, not include CSF and uimage header */
 
 	uimage_hd_ptr->ih_magic = cpu_to_be32(IH_MAGIC);
 	uimage_hd_ptr->ih_time = cpu_to_be32(time);
-	uimage_hd_ptr->ih_size = cpu_to_be32((sbuf.st_size - sizeof(uimage_header_t)));
+	uimage_hd_ptr->ih_size = cpu_to_be32((sbuf.st_size + 0x2000 - sizeof(flash_header_v2_t))); /* The st_size already contain the flash_header */
 	uimage_hd_ptr->ih_load = cpu_to_be32(ep);
 	uimage_hd_ptr->ih_ep = cpu_to_be32(ep);
 	uimage_hd_ptr->ih_dcrc = cpu_to_be32(checksum);
@@ -710,10 +773,131 @@ void set_uimage_header(uimage_header_t * uimage_hd_ptr, int fd, uint32_t ep)
 	uimage_hd_ptr->ih_hcrc = cpu_to_be32(checksum);
 }
 
+void generate_sld_with_ivt(char * input_file, uint32_t ep, char *out_file)
+{
+#define IVT_ALIGN 0x1000
+
+	struct stat sbuf;
+	void *file_ptr;
+	int ivt_fd, input_fd;
+	int aligned_size;
+
+	int i;
+	char pad = 0;
+
+	input_fd = open(input_file, O_RDONLY | O_BINARY);
+	if (input_fd < 0) {
+		fprintf(stderr, "%s: Can't open: %s\n",
+                            input_file, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	if (fstat(input_fd, &sbuf) < 0) {
+		fprintf(stderr, "generate_sld_with_ivt error: %s\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	file_ptr = mmap(0, sbuf.st_size, PROT_READ, MAP_SHARED, input_fd, 0);
+	if (file_ptr == MAP_FAILED) {
+		fprintf (stderr, "generate_sld_with_ivt, File can't read %s\n",
+			strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	ivt_fd = open (out_file, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, 0666);
+	if (ivt_fd < 0) {
+		fprintf(stderr, "%s: Can't open: %s\n",
+                                "sld-ivt.bin", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	if (write(ivt_fd, file_ptr, sbuf.st_size) != sbuf.st_size) {
+		fprintf(stderr, "error writing sld-ivt image\n");
+		exit(EXIT_FAILURE);
+	}
+
+	aligned_size = (sbuf.st_size + sizeof(uimage_header_t) + IVT_ALIGN - 1) & ~(IVT_ALIGN - 1);
+	i = sbuf.st_size + sizeof(uimage_header_t);
+
+	for (; i < aligned_size; i++) {
+		if (write(ivt_fd, (char *) &pad, 1) != 1) {
+			fprintf(stderr,
+					"Pad error on sld-ivt image\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	flash_header_v2_t ivt_header = { { 0xd1, 0x2000, 0x40 },
+		ep, 0, 0, 0,
+		(ep + aligned_size - sizeof(uimage_header_t)),
+		(ep + aligned_size - sizeof(uimage_header_t) + 0x20),
+		0 };
+
+	if (write(ivt_fd, &ivt_header, sizeof(flash_header_v2_t)) != sizeof(flash_header_v2_t)) {
+		fprintf(stderr, "IVT writing error on sld-ivt image\n");
+		exit(EXIT_FAILURE);
+	}
+
+	close(ivt_fd);
+	close(input_fd);
+}
+
+/* Return this IVT offset in the final output file */
+int generate_ivt_for_fit(int fd, int fit_offset, uint32_t ep, uint32_t *fit_load_addr)
+{
+	uimage_header_t image_header;
+
+	uint32_t fit_size, load_addr;
+	int align_len = 64 - 1; /* 64 is cacheline size */
+
+	lseek(fd, fit_offset, SEEK_SET);
+
+	if (read(fd, (char *)&image_header, sizeof(uimage_header_t)) != sizeof(uimage_header_t)) {
+		fprintf (stderr, "generate_ivt_for_fit read failed: %s\n",
+			strerror(errno));
+		exit (EXIT_FAILURE);
+	}
+
+	if (be32_to_cpu(image_header.ih_magic) != FDT_MAGIC){
+		fprintf (stderr, "generate_ivt_for_fit error: not a FIT file\n");
+		exit (EXIT_FAILURE);
+	}
+
+	fit_size = fdt_totalsize(&image_header);
+	fit_size = (fit_size + 3) & ~3;
+
+#define ALIGN_SIZE		0x1000
+
+	fit_size = ALIGN(fit_size, ALIGN_SIZE);
+
+	lseek(fd, fit_offset + fit_size, SEEK_SET);
+
+	/* ep is the u-boot entry. SPL loads the FIT before the u-boot address. 0x2000 is for CSF_SIZE */
+	load_addr = (ep - (fit_size + CSF_SIZE) - 512 -
+			align_len) & ~align_len;
+
+	flash_header_v2_t ivt_header = { { 0xd1, 0x2000, 0x40 },
+		load_addr, 0, 0, 0,
+		(load_addr + fit_size),
+		(load_addr + fit_size + 0x20),
+		0 };
+
+	if (write(fd, &ivt_header, sizeof(flash_header_v2_t)) != sizeof(flash_header_v2_t)) {
+		fprintf(stderr, "IVT writing error on fit image\n");
+		exit(EXIT_FAILURE);
+	}
+
+	*fit_load_addr = load_addr;
+
+	return fit_offset + fit_size;
+
+}
+
 int main(int argc, char **argv)
 {
 	int c, file_off, plugin_fd = -1, hdmi_fd = -1, ap_fd = -1, csf_hdmi_fd = -1, csf_fd = -1, ofd = -1, csf_plugin_fd = -1, sld_fd = -1;
-	unsigned int dcd_size = 0, plugin_start_addr = 0, ap_start_addr = 0, sld_start_addr = 0, sld_src_off = 0;
+	unsigned int dcd_size = 0, plugin_start_addr = 0, ap_start_addr = 0, sld_start_addr = 0, sld_src_off = 0, sld_csf_off = 0, sld_load_addr = 0;
 	char *ofname = NULL, *hdmi_img = NULL, *dcd_img = NULL, *plugin_img = NULL, *ap_img = NULL, *csf_img = NULL, *csf_plugin_img = NULL, *csf_hdmi_img = NULL, *sld_img = NULL;
 	char *signed_hdmi = NULL;
 	static imx_header_v2_t imx_header[3]; /* At most there are 3 IVT headers */
@@ -974,13 +1158,9 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 			}
 			close(csf_hdmi_fd);
-
-			imx_header[HDMI_IVT_ID].fhdr.csf = imx_header[HDMI_IVT_ID].fhdr.self + ALIGN(sizeof(imx_header_v2_t), 64); /* The fhdr + boot_data is 48 bytes, we align to 64 */
-
-			csf_hdmi_off = header_hdmi_2_off + (imx_header[HDMI_IVT_ID].fhdr.csf - imx_header[0].fhdr.self);
-		} else {
-			imx_header[HDMI_IVT_ID].fhdr.csf = 0;
 		}
+		imx_header[HDMI_IVT_ID].fhdr.csf = imx_header[HDMI_IVT_ID].fhdr.self + ALIGN(sizeof(imx_header_v2_t), 64); /* The fhdr + boot_data is 48 bytes, we align to 64 */
+		csf_hdmi_off = header_hdmi_2_off + (imx_header[HDMI_IVT_ID].fhdr.csf - imx_header[HDMI_IVT_ID].fhdr.self);
 
 		/* no matter if the hdmi csf exists, we still add 4KB for IVT and CSF*/
 		file_off += ALIGN(sizeof(imx_header_v2_t), 0x1000); /* Aligned to 4KB */
@@ -1137,34 +1317,81 @@ int main(int argc, char **argv)
 
 		csf_off = file_off;
 		file_off += sbuf.st_size;
+	} else {
+		imx_header[IMAGE_IVT_ID].fhdr.csf = imx_header[IMAGE_IVT_ID].boot_data.start + imx_header[IMAGE_IVT_ID].boot_data.size;
+
+		imx_header[IMAGE_IVT_ID].boot_data.size += CSF_SIZE; /* 8K region dummy CSF */
+
+		csf_off = file_off;
+		file_off += CSF_SIZE;
 	}
 
 	/* Second boot loader image */
 	if (sld_img) {
+		if (!using_fit) {
+			char sld_ivt_img[32];
+			memset(&sld_ivt_img, 0, 32);
 
-		sld_header_off = sld_src_off - rom_image_offset - ivt_offset;
-		imx_header[IMAGE_IVT_ID].fhdr.reserved1 = sld_header_off - header_image_off; /* Record the second bootloader relative offset in image's IVT reserved1*/
+			strncpy((char *)&sld_ivt_img, sld_img, (32 - 5));
+			strcat((char *)&sld_ivt_img, ".ivt");
 
-		sld_fd = open(sld_img, O_RDONLY | O_BINARY);
-		if (sld_fd < 0) {
-			fprintf(stderr, "%s: Can't open: %s\n",
-                                sld_img, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
+			fprintf(stderr, "SECOND LOADER IVT File:\t%s\n", (char *)&sld_ivt_img);
 
-		if (fstat(sld_fd, &sbuf) < 0) {
-			fprintf(stderr, "%s: Can't stat: %s\n",
-				sld_img, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
+			/* We add 8K region for IVT and CSF to this second boot loader image*/
+			/* According to u-boot authentication, the image size before IVT should align to 0x1000, this image size includes the uimage header because
+			 *  we also need to sign and authenticate the uimage header.
+			 *  Because the 8K region is added, we has to modify the size field in uimage to add the alignment padding and 8K region. This size does NOT include
+			 *  the size of uimage header.
+			 */
+			generate_sld_with_ivt(sld_img, sld_start_addr, (char *)&sld_ivt_img);
+			sld_img = (char *)&sld_ivt_img; /* Change to the sld_ivt image */
 
-		if (!using_fit)
+			sld_header_off = sld_src_off - rom_image_offset;
+			imx_header[IMAGE_IVT_ID].fhdr.reserved1 = sld_header_off - header_image_off; /* Record the second bootloader relative offset in image's IVT reserved1*/
+
+			sld_fd = open(sld_img, O_RDONLY | O_BINARY);
+			if (sld_fd < 0) {
+				fprintf(stderr, "%s: Can't open: %s\n",
+	                                sld_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
+			if (fstat(sld_fd, &sbuf) < 0) {
+				fprintf(stderr, "%s: Can't stat: %s\n",
+					sld_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
 			set_uimage_header(&uimage_hdr, sld_fd, sld_start_addr);
 
-		close(sld_fd);
+			close(sld_fd);
 
-		file_off = sld_header_off;
-		file_off += sbuf.st_size + sizeof(uimage_header_t);
+			file_off = sld_header_off;
+			file_off += sbuf.st_size + sizeof(uimage_header_t);
+
+			sld_csf_off = file_off;
+			file_off += CSF_SIZE - sizeof(flash_header_v2_t);
+		}else {
+			sld_header_off = sld_src_off - rom_image_offset;
+			imx_header[IMAGE_IVT_ID].fhdr.reserved1 = sld_header_off - header_image_off; /* Record the second bootloader relative offset in image's IVT reserved1*/
+			sld_fd = open(sld_img, O_RDONLY | O_BINARY);
+			if (sld_fd < 0) {
+				fprintf(stderr, "%s: Can't open: %s\n",
+	                                sld_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
+			if (fstat(sld_fd, &sbuf) < 0) {
+				fprintf(stderr, "%s: Can't stat: %s\n",
+					sld_img, strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
+			close(sld_fd);
+
+			file_off = sld_header_off;
+			file_off += sbuf.st_size + sizeof(uimage_header_t);
+		}
 	}
 
 
@@ -1258,9 +1485,13 @@ int main(int argc, char **argv)
 	if (csf_img) {
 		csf_off -= ivt_offset;
 		copy_file(ofd, csf_img, 0, csf_off, 0);
+	} else {
+		csf_off -= ivt_offset;
+		fill_zero(ofd, CSF_SIZE, csf_off);
 	}
 
 	if (sld_img) {
+		sld_header_off -= ivt_offset;
 		lseek(ofd, sld_header_off, SEEK_SET);
 
 		/* Write image header */
@@ -1272,8 +1503,12 @@ int main(int argc, char **argv)
 			}
 
 			copy_file(ofd, sld_img, 0, sld_header_off + sizeof(uimage_header_t), 0);
+			fill_zero(ofd, CSF_SIZE - sizeof(flash_header_v2_t), sld_csf_off);
+			sld_csf_off -= ivt_offset;
+			sld_load_addr = sld_start_addr - (uint32_t)sizeof(uimage_header_t);
 		} else {
 			copy_file(ofd, sld_img, 0, sld_header_off, 0);
+			sld_csf_off = generate_ivt_for_fit(ofd, sld_header_off, sld_start_addr, &sld_load_addr) + 0x20;
 		}
 	}
 
@@ -1306,13 +1541,16 @@ int main(int argc, char **argv)
 	fprintf(stderr, "\nLoader IMAGE:\n");
 	fprintf(stderr, " header_image_off \t0x%x\n dcd_off \t\t0x%x\n image_off \t\t0x%x\n csf_off \t\t0x%x\n",
 		header_image_off, dcd_off, image_off, csf_off);
+	fprintf(stderr, " spl hab block: \t0x%x 0x%x 0x%x\n",
+		imx_header[IMAGE_IVT_ID].fhdr.self, header_image_off, csf_off - header_image_off);
 
 	fprintf(stderr, "\nSecond Loader IMAGE:\n");
 	fprintf(stderr, " sld_header_off \t0x%x\n",
 		sld_header_off);
-
-	fprintf(stderr, "\ndone.\n");
-	fprintf(stderr, "Note: Please copy image to offset: IMAGE_OFFSET + IVT_OFFSET\n");
+	fprintf(stderr, " sld_csf_off \t\t0x%x\n",
+		sld_csf_off);
+	fprintf(stderr, " sld hab block: \t0x%x 0x%x 0x%x\n",
+		sld_load_addr, sld_header_off, sld_csf_off - sld_header_off);
 
 	return 0;
 }

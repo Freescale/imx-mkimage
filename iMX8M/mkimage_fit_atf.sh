@@ -10,6 +10,9 @@
 if [ ! -f $BL31 ]; then
 	echo "WARNING: BL31 file $BL31 NOT found, resulting binary is non-functional" >&2
 	BL31=/dev/null
+else
+	echo "bl31.bin size: " >&2
+	ls -lct bl31.bin | awk '{print $5}' >&2
 fi
 
 BL32="tee.bin"
@@ -18,6 +21,8 @@ if [ ! -f $BL32 ]; then
 	BL32=/dev/null
 else
 	echo "Building with TEE support, make sure your bl31 is compiled with spd. If you do not want tee, please delete tee.bin" >&2
+	echo "tee.bin size: " >&2
+	ls -lct tee.bin | awk '{print $5}' >&2
 fi
 
 BL33="u-boot-nodtb.bin"
@@ -25,7 +30,18 @@ BL33="u-boot-nodtb.bin"
 if [ ! -f $BL33 ]; then
 	echo "WARNING: $BL33 file NOT found" >&2
 	exit 0
+else
+	
+	echo "u-boot-nodtb.bin size: " >&2
+	ls -lct u-boot-nodtb.bin | awk '{print $5}' >&2
 fi
+
+for dtname in $*
+do
+	echo "$dtname size: " >&2
+	ls -lct $dtname | awk '{print $5}' >&2
+done
+
 
 cat << __HEADER_EOF
 /dts-v1/;
