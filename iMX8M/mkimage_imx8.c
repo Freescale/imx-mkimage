@@ -722,7 +722,8 @@ int main(int argc, char **argv)
 	struct stat sbuf;
 	uint32_t plugin_off = 0, hdmi_off = 0, image_off = 0, csf_plugin_off = 0, csf_hdmi_off = 0, csf_off = 0;
 	uint32_t header_hdmi_off = 0, header_hdmi_2_off = 0, header_plugin_off = 0, header_image_off = 0, dcd_off = 0;
-	uint32_t sld_header_off;
+	uint32_t sld_header_off = 0;
+	int using_fit = 0;
 	dcd_v2_t dcd_table;
 	uimage_header_t uimage_hdr;
 
@@ -730,6 +731,7 @@ int main(int argc, char **argv)
 	{
 		{"loader", required_argument, NULL, 'i'},
 		{"dcd", required_argument, NULL, 'd'},
+		{"fit", no_argument, NULL, 'f'},
 		{"out", required_argument, NULL, 'o'},
 		{"plugin", required_argument, NULL, 'p'},
 		{"hdmi", required_argument, NULL, 'h'},
@@ -750,7 +752,7 @@ int main(int argc, char **argv)
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long_only (argc, argv, ":i:d:o:p:h:q:m:e:b:",
+		c = getopt_long_only (argc, argv, ":i:f:d:o:p:h:q:m:e:b:",
 			long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -768,6 +770,10 @@ int main(int argc, char **argv)
 			case 'd':
 				fprintf(stderr, "DCD:\t%s\n", optarg);
 				dcd_img = optarg;
+				break;
+			case 'f':
+				fprintf(stderr, "Using FIT image\n");
+				using_fit = 1;
 				break;
 			case 'p':
 				fprintf(stderr, "PLUGIN:\t%s", optarg);
@@ -1125,7 +1131,8 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 
-		set_uimage_header(&uimage_hdr, sld_fd, sld_start_addr);
+		if (!using_fit)
+			set_uimage_header(&uimage_hdr, sld_fd, sld_start_addr);
 
 		close(sld_fd);
 
@@ -1153,7 +1160,7 @@ int main(int argc, char **argv)
 		if (write(ofd, &imx_header[HDMI_IVT_ID], sizeof(imx_header_v2_t)) != sizeof(imx_header_v2_t)) {
 			fprintf(stderr, "error writing image hdr\n");
 			exit(1);
-		}
+		};
 
 		copy_file(ofd, hdmi_img, 0, hdmi_off);
 
@@ -1222,12 +1229,17 @@ int main(int argc, char **argv)
 		lseek(ofd, sld_header_off, SEEK_SET);
 
 		/* Write image header */
-		if (write(ofd, &uimage_hdr, sizeof(uimage_header_t)) != sizeof(uimage_header_t)) {
-			fprintf(stderr, "error writing uimage hdr\n");
-			exit(1);
-		}
+		if (!using_fit) {
+			/* Write image header */
+			if (write(ofd, &uimage_hdr, sizeof(uimage_header_t)) != sizeof(uimage_header_t)) {
+				fprintf(stderr, "error writing uimage hdr\n");
+				exit(1);
+			}
 
-		copy_file(ofd, sld_img, 0, sld_header_off + sizeof(uimage_header_t));
+			copy_file(ofd, sld_img, 0, sld_header_off + sizeof(uimage_header_t));
+		} else {
+			copy_file(ofd, sld_img, 0, sld_header_off);
+		}
 	}
 
 	/* Close output file */
@@ -1236,7 +1248,8 @@ int main(int argc, char **argv)
 	dump_header_v2(imx_header, 0);
 	dump_header_v2(imx_header, 1);
 	dump_header_v2(imx_header, 2);
-	dump_uimage_header(&uimage_hdr);
+	if (!using_fit)
+		dump_uimage_header(&uimage_hdr);
 
 	fprintf(stderr, "========= OFFSET dump =========");
 	fprintf(stderr, "\nHDMI FW:\n");
