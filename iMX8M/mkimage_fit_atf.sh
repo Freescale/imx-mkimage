@@ -40,7 +40,7 @@ cat << __HEADER_EOF
 			type = "standalone";
 			arch = "arm64";
 			compression = "none";
-			load = <0x40100000>;
+			load = <0x40200000>;
 		};
 		atf@1 {
 			description = "ARM Trusted Firmware";
