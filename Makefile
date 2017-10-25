@@ -1,6 +1,6 @@
 
 MKIMG = $(PWD)/mkimage_imx8
-CC ?= gcc
+CC = gcc
 CFLAGS ?= -g -O2 -Wall -std=c99 -static
 INCLUDE += $(CURR_DIR)/src
 
