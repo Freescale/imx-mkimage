@@ -46,7 +46,7 @@ clean:
 dtbs = fsl-imx8mq-evk.dtb
 u-boot.itb:
 	./mkimage_fit_atf.sh $(dtbs) > u-boot.its
-	./mkimage_uboot -E -f u-boot.its u-boot.itb
+	./mkimage_uboot -E -p 0x3000 -f u-boot.its u-boot.itb
 
 flash_hdmi_spl_uboot: $(MKIMG) signed_hdmi_imx8m.bin u-boot-spl-ddr.bin u-boot.itb
 	./mkimage_imx8 -fit -signed_hdmi signed_hdmi_imx8m.bin -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot.itb 0x40001000 0x60000 -out $(OUTIMG)
