@@ -60,6 +60,9 @@ flash_spl_uboot: $(MKIMG) u-boot-spl-ddr.bin u-boot.itb
 flash_spl_uboot_tee: $(MKIMG) u-boot-spl-ddr.bin u-boot-atf-tee.bin
 	./mkimage_imx8 -loader u-boot-spl-ddr.bin 0x7E1000 -second_loader u-boot-atf-tee.bin 0x40200000 0x60000 -out $(OUTIMG)
 
+print_fit_hab: u-boot-nodtb.bin bl31.bin $(dtbs)
+	./print_fit_hab.sh 0x60000 $(dtbs)
+
 nightly :
 	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_1d_dmem.bin -O lpddr4_pmu_train_1d_dmem.bin
 	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_1d_imem.bin -O lpddr4_pmu_train_1d_imem.bin
