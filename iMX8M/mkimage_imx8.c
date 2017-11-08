@@ -219,7 +219,7 @@ typedef struct uimage_header {
 #define UNDEFINED 0xFFFFFFFF
 
 static void
-copy_file (int ifd, const char *datafile, int pad, int offset)
+copy_file (int ifd, const char *datafile, int pad, int offset, int datafile_offset)
 {
 	int dfd;
 	struct stat sbuf;
@@ -250,9 +250,9 @@ copy_file (int ifd, const char *datafile, int pad, int offset)
 		exit (EXIT_FAILURE);
 	}
 
-	size = sbuf.st_size;
+	size = sbuf.st_size - datafile_offset;
 	lseek(ifd, offset, SEEK_SET);
-	if (write(ifd, ptr, size) != size) {
+	if (write(ifd, ptr + datafile_offset, size) != size) {
 		fprintf (stderr, "Write error %s\n",
 			strerror(errno));
 		exit (EXIT_FAILURE);
@@ -715,6 +715,7 @@ int main(int argc, char **argv)
 	int c, file_off, plugin_fd = -1, hdmi_fd = -1, ap_fd = -1, csf_hdmi_fd = -1, csf_fd = -1, ofd = -1, csf_plugin_fd = -1, sld_fd = -1;
 	unsigned int dcd_size = 0, plugin_start_addr = 0, ap_start_addr = 0, sld_start_addr = 0, sld_src_off = 0;
 	char *ofname = NULL, *hdmi_img = NULL, *dcd_img = NULL, *plugin_img = NULL, *ap_img = NULL, *csf_img = NULL, *csf_plugin_img = NULL, *csf_hdmi_img = NULL, *sld_img = NULL;
+	char *signed_hdmi = NULL;
 	static imx_header_v2_t imx_header[3]; /* At most there are 3 IVT headers */
 	uint32_t ivt_offset = IVT_OFFSET_SD;
 	uint32_t rom_image_offset = IMAGE_OFFSET_SD;
@@ -735,6 +736,7 @@ int main(int argc, char **argv)
 		{"out", required_argument, NULL, 'o'},
 		{"plugin", required_argument, NULL, 'p'},
 		{"hdmi", required_argument, NULL, 'h'},
+		{"signed_hdmi", required_argument, NULL, 's'},
 		{"csf_plugin", required_argument, NULL, 'q'},
 		{"csf_hdmi", required_argument, NULL, 'm'},
 		{"dev", required_argument, NULL, 'e'},
@@ -801,6 +803,10 @@ int main(int argc, char **argv)
 			case 'h':
 				fprintf(stderr, "HDMI FW:\t%s\n", optarg); /* Fixed address for HDMI Firmware */
 				hdmi_img = optarg;
+				break;
+			case 's':
+				fprintf(stderr, "SIGNED HDMI FW:\t%s\n", optarg); /* Fixed address for HDMI Firmware */
+				signed_hdmi = optarg;
 				break;
 			case 'o':
 				fprintf(stderr, "Output:\t\t%s\n", optarg);
@@ -874,8 +880,29 @@ int main(int argc, char **argv)
 
 	file_off = 0;
 
+	if (signed_hdmi) {
+		header_hdmi_off = file_off + ivt_offset;
+
+		hdmi_fd = open(signed_hdmi, O_RDONLY | O_BINARY);
+		if (hdmi_fd < 0) {
+			fprintf(stderr, "%s: Can't open: %s\n",
+                                signed_hdmi, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (fstat(hdmi_fd, &sbuf) < 0) {
+			fprintf(stderr, "%s: Can't stat: %s\n",
+				signed_hdmi, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		close(hdmi_fd);
+
+		/* Aligned to 104KB = 92KB FW image + 0x8000 (IVT and alignment) + 0x4000 (second IVT + CSF)*/
+		file_off += ALIGN(sbuf.st_size, HDMI_FW_SIZE + 0x2000 + 0x1000);
+	}
+
 	/* Check the HDMI image and set its IVT first */
-	if(hdmi_img) {
+	if(!signed_hdmi && hdmi_img) {
 
 		header_hdmi_off = file_off + ivt_offset;
 
@@ -948,15 +975,15 @@ int main(int argc, char **argv)
 			}
 			close(csf_hdmi_fd);
 
-			imx_header[0].fhdr.csf = imx_header[0].fhdr.self + ALIGN(sizeof(imx_header_v2_t), 64); /* The fhdr + boot_data is 48 bytes, we align to 64 */
+			imx_header[HDMI_IVT_ID].fhdr.csf = imx_header[HDMI_IVT_ID].fhdr.self + ALIGN(sizeof(imx_header_v2_t), 64); /* The fhdr + boot_data is 48 bytes, we align to 64 */
 
-			csf_hdmi_off = header_hdmi_2_off + (imx_header[0].fhdr.csf - imx_header[0].fhdr.self);
+			csf_hdmi_off = header_hdmi_2_off + (imx_header[HDMI_IVT_ID].fhdr.csf - imx_header[0].fhdr.self);
 		} else {
-			imx_header[0].fhdr.csf = 0;
+			imx_header[HDMI_IVT_ID].fhdr.csf = 0;
 		}
 
-		/* no matter if the hdmi csf exists, we still add 8KB for IVT and CSF*/
-		file_off += ALIGN(sizeof(imx_header_v2_t), 0x1000); /* Aligned to 8KB */
+		/* no matter if the hdmi csf exists, we still add 4KB for IVT and CSF*/
+		file_off += ALIGN(sizeof(imx_header_v2_t), 0x1000); /* Aligned to 4KB */
 	}
 
 	if(plugin_img) {
@@ -1149,7 +1176,15 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if(hdmi_img) {
+	if(signed_hdmi) {
+		header_hdmi_off -= ivt_offset;
+		lseek(ofd, header_hdmi_off, SEEK_SET);
+
+		/* The signed HDMI FW has 0x400 IVT offset, need remove it */
+		copy_file(ofd, signed_hdmi, 0, header_hdmi_off, 0x400);
+	}
+
+	if(!signed_hdmi && hdmi_img) {
 		header_hdmi_off -= ivt_offset;
 		hdmi_off -= ivt_offset;
 		header_hdmi_2_off -= ivt_offset;
@@ -1162,7 +1197,7 @@ int main(int argc, char **argv)
 			exit(1);
 		};
 
-		copy_file(ofd, hdmi_img, 0, hdmi_off);
+		copy_file(ofd, hdmi_img, 0, hdmi_off, 0);
 
 		lseek(ofd, header_hdmi_2_off, SEEK_SET);
 
@@ -1173,7 +1208,7 @@ int main(int argc, char **argv)
 
 		if (csf_hdmi_img) {
 			csf_hdmi_off -= ivt_offset;
-			copy_file(ofd, csf_hdmi_img, 0, csf_hdmi_off);
+			copy_file(ofd, csf_hdmi_img, 0, csf_hdmi_off, 0);
 		}
 	}
 
@@ -1189,11 +1224,11 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
-		copy_file(ofd, plugin_img, 0, plugin_off);
+		copy_file(ofd, plugin_img, 0, plugin_off, 0);
 
 		if (csf_plugin_img) {
 			csf_plugin_off -= ivt_offset;
-			copy_file(ofd, csf_plugin_img, 0, csf_plugin_off);
+			copy_file(ofd, csf_plugin_img, 0, csf_plugin_off, 0);
 		}
 	}
 
@@ -1218,11 +1253,11 @@ int main(int argc, char **argv)
 		}
 	}
 
-	copy_file(ofd, ap_img, 0, image_off);
+	copy_file(ofd, ap_img, 0, image_off, 0);
 
 	if (csf_img) {
 		csf_off -= ivt_offset;
-		copy_file(ofd, csf_img, 0, csf_off);
+		copy_file(ofd, csf_img, 0, csf_off, 0);
 	}
 
 	if (sld_img) {
@@ -1236,25 +1271,33 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 
-			copy_file(ofd, sld_img, 0, sld_header_off + sizeof(uimage_header_t));
+			copy_file(ofd, sld_img, 0, sld_header_off + sizeof(uimage_header_t), 0);
 		} else {
-			copy_file(ofd, sld_img, 0, sld_header_off);
+			copy_file(ofd, sld_img, 0, sld_header_off, 0);
 		}
 	}
 
 	/* Close output file */
 	close(ofd);
 
-	dump_header_v2(imx_header, 0);
+	if (!signed_hdmi)
+		dump_header_v2(imx_header, 0);
 	dump_header_v2(imx_header, 1);
 	dump_header_v2(imx_header, 2);
+
 	if (!using_fit)
 		dump_uimage_header(&uimage_hdr);
 
 	fprintf(stderr, "========= OFFSET dump =========");
-	fprintf(stderr, "\nHDMI FW:\n");
-	fprintf(stderr, " header_hdmi_off \t0x%x\n hdmi_off \t\t0x%x\n header_hdmi_2_off \t0x%x\n csf_hdmi_off \t\t0x%x\n",
-		header_hdmi_off, hdmi_off, header_hdmi_2_off, csf_hdmi_off);
+	if (signed_hdmi) {
+		fprintf(stderr, "\nSIGNED HDMI FW:\n");
+		fprintf(stderr, " header_hdmi_off \t0x%x\n",
+			header_hdmi_off);
+	} else {
+		fprintf(stderr, "\nHDMI FW:\n");
+		fprintf(stderr, " header_hdmi_off \t0x%x\n hdmi_off \t\t0x%x\n header_hdmi_2_off \t0x%x\n csf_hdmi_off \t\t0x%x\n",
+			header_hdmi_off, hdmi_off, header_hdmi_2_off, csf_hdmi_off);
+	}
 
 	fprintf(stderr, "\nPLUGIN:\n");
 	fprintf(stderr, " header_plugin_off \t0x%x\n plugin_off \t\t0x%x\n csf_plugin_off \t0x%x\n",
