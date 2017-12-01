@@ -5,17 +5,25 @@ DCD_CFG = imx8qx_dcd.cfg.tmp
 DCD_CFG_16BIT_SRC = imx8qx_dcd_16bit_1.2GHz.cfg
 DCD_16BIT_CFG = imx8qx_16bit_dcd.cfg.tmp
 
+DCD_CFG_DDR3_SRC = imx8qx_ddr3_dcd_800MHz.cfg
+DCD_DDR3_CFG = imx8qx_ddr3_dcd_800MHz.cfg.tmp
+
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
 #set default DDR_training to be in DCDs
 
+DDR3_DCD ?= 0
 DDR_TRAIN ?= 1
 WGET = /usr/bin/wget
 N ?= latest
 SERVER=http://yb2.am.freescale.net
 DIR = build-output/Linux_IMX_MX8/$(N)/common_bsp
+
+ifeq ($(DDR3_DCD), 1)
+	DCD_CFG_SRC = imx8qx_ddr3_dcd_800MHz.cfg
+endif
 
 ifneq ($(wildcard /usr/bin/rename.ul),)
     RENAME = rename.ul
@@ -27,6 +35,7 @@ $(DCD_CFG): FORCE
 	@echo "Converting iMX8 DCD file"
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_CFG) $(DCD_CFG_SRC)
 	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_16BIT_CFG) $(DCD_CFG_16BIT_SRC)
+	$(CC) -E -Wp,-MD,.imx8qx_dcd.cfg.cfgtmp.d  -nostdinc -Iinclude -I$(INCLUDE) -DDDR_TRAIN_IN_DCD=$(DDR_TRAIN) -x c -o $(DCD_DDR3_CFG) $(DCD_CFG_DDR3_SRC)
 FORCE:
 
 u-boot-atf.bin: u-boot.bin bl31.bin
@@ -47,6 +56,9 @@ flash_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
 
 flash_16bit_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
 	./$(MKIMG) -soc QX -c -dcd $(DCD_16BIT_CFG) -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
+
+flash_ddr3_dcd: $(MKIMG) $(DCD_CFG) scfw_tcm.bin u-boot-atf.bin
+	./$(MKIMG) -soc QX -c -dcd $(DCD_DDR3_CFG) -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
 
 flash: $(MKIMG) scfw_tcm.bin u-boot-atf.bin
 	./$(MKIMG) -soc QX -c -scfw scfw_tcm.bin -c -ap u-boot-atf.bin a35 0x80000000 -out flash.bin
