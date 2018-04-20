@@ -6,6 +6,10 @@ INCLUDE += $(CURR_DIR)/src
 
 SRCS = src/imx8qm.c  src/imx8qx.c  src/mkimage_imx8.c
 
+ifeq ($(SOC), iMX8M)
+DTBS ?= fsl-imx8mq-evk.dtb
+EXTRAS := dtbs=$(DTBS)
+endif
 
 vpath $(INCLUDE)
 
@@ -13,7 +17,7 @@ vpath $(INCLUDE)
 
 .DEFAULT:
 	@$(MAKE) -s --no-print-directory bin
-	@$(MAKE) --no-print-directory -C $(SOC) -f soc.mak $@
+	@$(MAKE) ${EXTRAS} --no-print-directory -C $(SOC) -f soc.mak $@
 
 #print out usage as the default target
 all: $(MKIMG) help
