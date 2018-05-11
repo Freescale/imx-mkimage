@@ -7,12 +7,6 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -std=c99 -static
 INCLUDE = ./lib
 
-WGET = /usr/bin/wget
-N ?= latest
-SERVER=http://yb2.am.freescale.net
-DIR = build-output/Linux_IMX_4.9_morty_trunk_next_mx8/$(N)/common_bsp
-FW_DIR = imx-boot/imx-boot-tools/imx8mq
-
 $(MKIMG): mkimage_imx8.c
 	@echo "Compiling mkimage_imx8"
 	$(CC) $(CFLAGS) mkimage_imx8.c -o $(MKIMG) -lz
@@ -93,18 +87,6 @@ flash_lpddr4_spl_uboot: flash_lpddr4_no_hdmi
 
 print_fit_hab: u-boot-nodtb.bin bl31.bin $(dtbs)
 	./print_fit_hab.sh 0x60000 $(dtbs)
-
-nightly :
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_1d_dmem.bin -O lpddr4_pmu_train_1d_dmem.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_1d_imem.bin -O lpddr4_pmu_train_1d_imem.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_2d_dmem.bin -O lpddr4_pmu_train_2d_dmem.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/lpddr4_pmu_train_2d_imem.bin -O lpddr4_pmu_train_2d_imem.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/bl31-imx8mq.bin -O bl31.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/u-boot-spl.bin -O u-boot-spl.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/u-boot-nodtb.bin -O u-boot-nodtb.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/${dtbs} -O ${dtbs}
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/signed_hdmi_imx8m.bin -O signed_hdmi_imx8m.bin
-	@$(WGET) -q $(SERVER)/$(DIR)/$(FW_DIR)/mkimage_uboot -O mkimage_uboot
 
 #flash_dcd_uboot: $(MKIMG) $(DCD_CFG) u-boot-atf.bin
 #	./mkimage_imx8 -dcd $(DCD_CFG) -loader u-boot-atf.bin 0x40001000 -out $(OUTIMG)
